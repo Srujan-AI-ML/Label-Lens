@@ -131,7 +131,7 @@ Open `http://localhost:5173` in your browser.
 ## 👤 Author Information
 
 - **Author**: Srujan
-- **Email**: `[To be updated]`
+- **Email**: asgaladechronicles@gmail.com
 - **Repository**: [https://github.com/Srujan-AI-ML/Smart-Bite](https://github.com/Srujan-AI-ML/Smart-Bite)
 
 ---
