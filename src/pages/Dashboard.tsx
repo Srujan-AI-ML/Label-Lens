@@ -1,446 +1,199 @@
-import React, { useState, useMemo } from 'react';
-import { useInventory } from '../context/InventoryContext';
-import { InventoryCard } from '../components/InventoryCard';
-import { AddItemForm } from '../components/AddItemForm';
-import { ActionModal } from '../components/ActionModal';
-import { Plus, Search, AlertTriangle, CheckCircle, Sparkles, TrendingUp, X, Filter, ChevronDown, Trophy, QrCode } from 'lucide-react';
-import type { InventoryItem } from '../types';
+import React from 'react';
+import { useProduct } from '../context/ProductContext';
+import { ShieldCheck, ShieldAlert, FileText, Activity, ArrowRight, BookOpen, Scale, Award } from 'lucide-react';
+import type { ScannedProduct } from '../types';
 
-type StatusFilter = 'all' | 'expired' | 'expiring' | 'fresh';
-type CategoryFilter = 'all' | 'Dairy' | 'Grain' | 'Vegetable' | 'Meat' | 'Snacks' | 'Other';
-type SortOption = 'expiry' | 'name' | 'added';
+interface DashboardProps {
+    onNavigate: (page: 'home' | 'scan' | 'repository') => void;
+    onSelectProduct: (product: ScannedProduct) => void;
+}
 
-// Get greeting based on time of day
-const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-};
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduct }) => {
+    const { products, stats, isLoading } = useProduct();
 
-export const Dashboard: React.FC = () => {
-    const { items } = useInventory();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-    const [showFilters, setShowFilters] = useState(false);
-
-    // Filter states
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-    const [sortBy, setSortBy] = useState<SortOption>('expiry');
-
-    // Helper to calculate days left
-    const getDaysLeft = (expiryDate: string) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiry = new Date(expiryDate);
-        return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'Compliant':
+                return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50';
+            case 'Partially Compliant':
+                return 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50';
+            default:
+                return 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50';
+        }
     };
 
-    // Calculate stats
-    const stats = useMemo(() => {
-        let expired = 0, nearExpiry = 0, fresh = 0;
-        items.forEach(item => {
-            const daysLeft = getDaysLeft(item.expiryDate);
-            if (daysLeft < 0) expired++;
-            else if (daysLeft <= 7) nearExpiry++;
-            else fresh++;
-        });
-        // Calculate waste score (higher is better - penalize expired items)
-        const wasteScore = items.length > 0
-            ? Math.max(0, Math.round(100 - (expired * 20) - (nearExpiry * 5)))
-            : 100;
-        return { expired, nearExpiry, fresh, total: items.length, wasteScore };
-    }, [items]);
+    const recentScans = products.slice(0, 5);
 
-    // Filter and sort items
-    const filteredItems = useMemo(() => {
-        let result = items.filter(item =>
-            item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-500 dark:text-gray-400">Loading dashboard data...</p>
+                </div>
+            </div>
         );
-
-        // Status filter
-        if (statusFilter !== 'all') {
-            result = result.filter(item => {
-                const daysLeft = getDaysLeft(item.expiryDate);
-                if (statusFilter === 'expired') return daysLeft < 0;
-                if (statusFilter === 'expiring') return daysLeft >= 0 && daysLeft <= 7;
-                if (statusFilter === 'fresh') return daysLeft > 7;
-                return true;
-            });
-        }
-
-        // Category filter
-        if (categoryFilter !== 'all') {
-            result = result.filter(item => item.category === categoryFilter);
-        }
-
-        // Sort
-        result.sort((a, b) => {
-            if (sortBy === 'expiry') {
-                return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
-            }
-            if (sortBy === 'name') {
-                return a.name.localeCompare(b.name);
-            }
-            return 0; // 'added' - keep original order
-        });
-
-        return result;
-    }, [items, searchQuery, statusFilter, categoryFilter, sortBy]);
-
-    const activeFiltersCount = [statusFilter !== 'all', categoryFilter !== 'all'].filter(Boolean).length;
+    }
 
     return (
-        <div className="p-4 md:p-6 max-w-7xl mx-auto pb-24">
-            {/* Greeting Header */}
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+            {/* Top Welcome Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
-                        {getGreeting()}! 👋
-                    </h2>
+                    <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                        <Scale className="text-indigo-600 dark:text-indigo-400" />
+                        Legal Metrology Compliance Checker
+                    </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">
-                        {stats.total > 0
-                            ? `You're tracking ${stats.total} item${stats.total !== 1 ? 's' : ''} in your inventory.`
-                            : 'Start by adding items to your inventory.'
-                        }
+                        Assess, validate and verify mandatory declarations under Legal Metrology Rules, 2011.
                     </p>
                 </div>
-                {stats.total > 0 && (
-                    <div className="flex items-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 px-4 py-2 rounded-full border border-emerald-200 dark:border-emerald-800">
-                        <Trophy size={18} className="text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-                            Waste Score: {stats.wasteScore}/100
-                        </span>
-                    </div>
-                )}
-            </header>
-
-            {/* Hero Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <button
-                    onClick={() => { setStatusFilter('expired'); setShowFilters(true); }}
-                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group
-                        bg-red-50 dark:bg-red-900/10 
-                        ${statusFilter === 'expired' ? 'border-red-400 ring-2 ring-red-200 dark:ring-red-800' : 'border-red-100 dark:border-red-800/30'}`}
+                    onClick={() => onNavigate('scan')}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/35 transition-all text-sm self-start md:self-auto cursor-pointer"
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/50 text-red-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <AlertTriangle size={24} />
-                        </div>
-                        <div className="text-left">
-                            <h3 className="text-2xl md:text-3xl font-bold text-red-600 dark:text-red-400">{stats.expired}</h3>
-                            <p className="text-sm text-red-400 dark:text-red-300 font-medium">Expired</p>
-                        </div>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => { setStatusFilter('expiring'); setShowFilters(true); }}
-                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group
-                        bg-amber-50 dark:bg-amber-900/10 
-                        ${statusFilter === 'expiring' ? 'border-amber-400 ring-2 ring-amber-200 dark:ring-amber-800' : 'border-amber-100 dark:border-amber-800/30'}`}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Sparkles size={24} />
-                        </div>
-                        <div className="text-left">
-                            <h3 className="text-2xl md:text-3xl font-bold text-amber-600 dark:text-amber-400">{stats.nearExpiry}</h3>
-                            <p className="text-sm text-amber-500 dark:text-amber-300 font-medium">Expiring Soon</p>
-                        </div>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => { setStatusFilter('fresh'); setShowFilters(true); }}
-                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group
-                        bg-emerald-50 dark:bg-emerald-900/10 
-                        ${statusFilter === 'fresh' ? 'border-emerald-400 ring-2 ring-emerald-200 dark:ring-emerald-800' : 'border-emerald-100 dark:border-emerald-800/30'}`}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <CheckCircle size={24} />
-                        </div>
-                        <div className="text-left">
-                            <h3 className="text-2xl md:text-3xl font-bold text-emerald-600 dark:text-emerald-400">{stats.fresh}</h3>
-                            <p className="text-sm text-emerald-500 dark:text-emerald-300 font-medium">Fresh Items</p>
-                        </div>
-                    </div>
-                </button>
-
-                <button
-                    onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); }}
-                    className={`p-5 rounded-2xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group
-                        bg-violet-50 dark:bg-violet-900/10 
-                        ${statusFilter === 'all' && categoryFilter === 'all' ? 'border-violet-400 ring-2 ring-violet-200 dark:ring-violet-800' : 'border-violet-100 dark:border-violet-800/30'}`}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/50 text-violet-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <TrendingUp size={24} />
-                        </div>
-                        <div className="text-left">
-                            <h3 className="text-2xl md:text-3xl font-bold text-violet-600 dark:text-violet-400">{stats.total}</h3>
-                            <p className="text-sm text-violet-500 dark:text-violet-300 font-medium">Total Items</p>
-                        </div>
-                    </div>
+                    <Activity size={16} />
+                    Start Compliance Scan
                 </button>
             </div>
 
-            {/* Search and Filters */}
-            <div className="space-y-3 mb-6">
-                <div className="flex gap-3">
-                    <div className="flex-1 relative">
-                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-                        <input
-                            type="text"
-                            placeholder="Search inventory..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 shadow-sm transition-all"
-                        />
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                        <FileText size={24} />
                     </div>
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${showFilters || activeFiltersCount > 0
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-emerald-300 dark:hover:border-emerald-600'
-                            }`}
-                    >
-                        <Filter size={18} />
-                        <span className="hidden sm:inline">Filters</span>
-                        {activeFiltersCount > 0 && (
-                            <span className="w-5 h-5 bg-white/20 rounded-full text-xs flex items-center justify-center">
-                                {activeFiltersCount}
-                            </span>
-                        )}
-                        <ChevronDown size={16} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                    </button>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="hidden md:flex bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg shadow-emerald-500/30 font-semibold items-center gap-2 transition-all active:scale-95"
-                        >
-                            <Plus size={20} />
-                            Add Item
-                        </button>
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            aria-label="Scan Barcode"
-                            className="hidden md:flex bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-4 py-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all items-center justify-center"
-                        >
-                            <QrCode size={20} />
-                        </button>
+                    <div>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Total Scanned</p>
+                        <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.total}</p>
                     </div>
                 </div>
 
-                {/* Filter Panel */}
-                {showFilters && (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm animate-fade-in">
-                        <div className="flex flex-wrap gap-4">
-                            {/* Status Filter */}
-                            <div className="flex-1 min-w-[150px]">
-                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Status</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(['all', 'expired', 'expiring', 'fresh'] as StatusFilter[]).map(status => (
-                                        <button
-                                            key={status}
-                                            onClick={() => setStatusFilter(status)}
-                                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${statusFilter === status
-                                                ? status === 'expired' ? 'bg-rose-500 text-white'
-                                                    : status === 'expiring' ? 'bg-amber-500 text-white'
-                                                        : status === 'fresh' ? 'bg-emerald-500 text-white'
-                                                            : 'bg-gray-800 dark:bg-white text-white dark:text-gray-800'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                        >
-                                            {status === 'all' ? 'All' : status === 'expiring' ? 'Expiring Soon' : status.charAt(0).toUpperCase() + status.slice(1)}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Category Filter */}
-                            <div className="flex-1 min-w-[150px]">
-                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Category</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(['all', 'Dairy', 'Grain', 'Vegetable', 'Meat', 'Snacks', 'Other'] as CategoryFilter[]).map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={() => setCategoryFilter(cat)}
-                                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${categoryFilter === cat
-                                                ? 'bg-emerald-500 text-white'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                        >
-                                            {cat === 'all' ? 'All' : cat}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Sort */}
-                            <div className="min-w-[120px]">
-                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Sort by</label>
-                                <select
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                                    className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                                >
-                                    <option value="expiry">Expiry Date</option>
-                                    <option value="name">Name</option>
-                                    <option value="added">Recently Added</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Clear Filters */}
-                        {activeFiltersCount > 0 && (
-                            <button
-                                onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); }}
-                                className="mt-3 text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium"
-                            >
-                                ✕ Clear all filters
-                            </button>
-                        )}
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                        <ShieldCheck size={24} />
                     </div>
-                )}
-
-                {/* Active Filters Summary */}
-                {!showFilters && activeFiltersCount > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Active filters:</span>
-                        {statusFilter !== 'all' && (
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${statusFilter === 'expired' ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
-                                : statusFilter === 'expiring' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                    : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                                }`}>
-                                {statusFilter === 'expiring' ? 'Expiring Soon' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-                                <button onClick={() => setStatusFilter('all')} className="hover:bg-black/10 dark:hover:bg-white/10 rounded-full p-0.5">
-                                    <X size={12} />
-                                </button>
-                            </span>
-                        )}
-                        {categoryFilter !== 'all' && (
-                            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium flex items-center gap-1">
-                                {categoryFilter}
-                                <button onClick={() => setCategoryFilter('all')} className="hover:bg-black/10 dark:hover:bg-white/10 rounded-full p-0.5">
-                                    <X size={12} />
-                                </button>
-                            </span>
-                        )}
+                    <div>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Fully Compliant</p>
+                        <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.compliant}</p>
                     </div>
-                )}
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
+                    <div className="p-4 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-2xl">
+                        <ShieldAlert size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Non-Compliant</p>
+                        <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.nonCompliant}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
+                    <div className="p-4 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 rounded-2xl">
+                        <Award size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Avg. Compliance Score</p>
+                        <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.averageScore}%</p>
+                    </div>
+                </div>
             </div>
 
-            {/* Results Count */}
-            {(searchQuery || activeFiltersCount > 0) && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Showing {filteredItems.length} of {items.length} items
-                </p>
-            )}
-
-            {/* Inventory Grid */}
-            {filteredItems.length === 0 ? (
-                <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700">
-                    <div className="text-6xl mb-4">{activeFiltersCount > 0 ? '🔍' : '🥗'}</div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">
-                        {activeFiltersCount > 0 ? 'No matching items' : 'No items yet!'}
-                    </h3>
-                    <p className="text-gray-500 dark:text-gray-400 mb-6">
-                        {activeFiltersCount > 0
-                            ? 'Try adjusting your filters'
-                            : 'Add your first item to start tracking'
-                        }
-                    </p>
-                    {activeFiltersCount > 0 ? (
-                        <button
-                            onClick={() => { setStatusFilter('all'); setCategoryFilter('all'); setSearchQuery(''); }}
-                            className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
-                        >
-                            Clear Filters
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all"
-                        >
-                            <Plus size={18} className="inline mr-2" />
-                            Add Your First Item
-                        </button>
-                    )}
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredItems.map(item => (
-                        <InventoryCard
-                            key={item.id}
-                            item={item}
-                            onPreserve={() => setSelectedItem(item)}
-                        />
-                    ))}
-
-                    {/* Scan New Item Card */}
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-500 group transition-all min-h-[200px]"
-                    >
-                        <div className="w-14 h-14 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-900/30 transition-colors">
-                            <Plus size={24} className="text-gray-400 dark:text-gray-500 group-hover:text-emerald-500 transition-colors" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Scan New Item</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[150px]">Add more groceries to track their freshness.</p>
-                    </button>
-                </div>
-            )}
-
-            {/* Floating Action Button (Mobile) */}
-            <button
-                onClick={() => setShowAddModal(true)}
-                className="fixed bottom-24 right-6 md:hidden w-16 h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full shadow-2xl shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition-transform z-50"
-            >
-                <Plus size={28} />
-            </button>
-
-            {/* Add Item Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative">
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Columns - Recent Inspections */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 h-full">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
-                                Add New Item
-                            </h2>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Recent Inspections</h2>
                             <button
-                                onClick={() => setShowAddModal(false)}
-                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                                onClick={() => onNavigate('repository')}
+                                className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 cursor-pointer"
                             >
-                                <X size={20} className="text-gray-500 dark:text-gray-400" />
+                                View All Scans
+                                <ArrowRight size={14} />
                             </button>
                         </div>
-                        <AddItemForm onClose={() => setShowAddModal(false)} />
+
+                        {recentScans.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <div className="text-5xl mb-3">📁</div>
+                                <h3 className="text-base font-bold text-gray-700 dark:text-gray-300">No scanned products yet</h3>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 max-w-sm">
+                                    Upload label photos or scan packaging to check compliance and build your database.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {recentScans.map((p) => (
+                                    <div
+                                        key={p.id}
+                                        onClick={() => onSelectProduct(p)}
+                                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-800"
+                                    >
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <div className="w-12 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                                                {p.imageData ? (
+                                                    <img src={p.imageData} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    '📦'
+                                                )}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                                                    {p.productName}
+                                                </h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    Scanned on {new Date(p.scannedAt).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(p.complianceStatus)}`}>
+                                                {p.complianceStatus}
+                                            </span>
+                                            <span className="text-sm font-black text-gray-900 dark:text-white">
+                                                {p.complianceScore}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
-            )}
 
-            {/* Action Modal */}
-            {selectedItem && (
-                <ActionModal
-                    item={selectedItem}
-                    onClose={() => setSelectedItem(null)}
-                />
-            )}
-
-            {/* Animation Style */}
-            <style>{`
-                @keyframes fade-in {
-                    from { opacity: 0; transform: translateY(-10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.2s ease-out;
-                }
-            `}</style>
+                {/* Right Column - Legal Metrology Rules Checklist */}
+                <div>
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                            <BookOpen size={20} className="text-indigo-600 dark:text-indigo-400" />
+                            Rules, 2011 Checklist
+                        </h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                            All packaged commodities sold in India must bear the following declarations:
+                        </p>
+                        <div className="space-y-3">
+                            {[
+                                { title: '1. Product Identity', desc: 'Generic or common name of the commodity.' },
+                                { title: '2. Net Quantity', desc: 'Standard weight, volume, or count of product.' },
+                                { title: '3. Date of Manufacture', desc: 'Month and year of manufacture/import.' },
+                                { title: '4. Maximum Retail Price', desc: 'MRP inclusive of all taxes.' },
+                                { title: '5. Manufacturer / Packer Details', desc: 'Name and complete physical address.' },
+                                { title: '6. Customer Care Contact', desc: 'Helpline telephone number and email.' },
+                                { title: '7. Unit Sale Price', desc: 'Per-gram/ml price calculation details.' },
+                                { title: '8. Country of Origin', desc: 'Declared for all imported commodities.' },
+                            ].map((rule, idx) => (
+                                <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white">{rule.title}</h4>
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{rule.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

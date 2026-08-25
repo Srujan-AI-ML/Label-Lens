@@ -47,6 +47,12 @@ export default defineConfig(({ mode }) => {
             const id = pathname.substring('/api/items/'.length);
             filePath = './api/items/[id].js';
             query = { id };
+          } else if (pathname === '/api/products') {
+            filePath = './api/products/index.js';
+          } else if (pathname.startsWith('/api/products/')) {
+            const id = pathname.substring('/api/products/'.length);
+            filePath = './api/products/[id].js';
+            query = { id };
           } else if (pathname === '/api/whatsapp/send') {
             filePath = './api/whatsapp/send.js';
           } else {

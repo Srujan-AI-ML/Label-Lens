@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
-import { Recipes } from './pages/Recipes';
+import { ScanProduct } from './pages/ScanProduct';
+import { Repository } from './pages/Repository';
+import { ReportDetail } from './pages/ReportDetail';
 import { LoginPage } from './pages/LoginPage';
-import { InventoryProvider } from './context/InventoryContext';
+import { ProductProvider } from './context/ProductContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import type { ScannedProduct } from './types';
 
-export type PageType = 'home' | 'recipes' | 'analytics';
+export type PageType = 'home' | 'scan' | 'repository';
 
 // Main app content (protected)
 function AppContent() {
   const [currentPage, setCurrentPage] = useState<PageType>('home');
+  const [selectedProduct, setSelectedProduct] = useState<ScannedProduct | null>(null);
   const { isAuthenticated, isLoading } = useAuth();
 
   // Show loading while checking auth
@@ -19,7 +23,7 @@ function AppContent() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       </div>
@@ -31,31 +35,56 @@ function AppContent() {
     return <LoginPage />;
   }
 
+  const navigateToPage = (page: PageType) => {
+    setSelectedProduct(null); // Clear selected report when switching main tabs
+    setCurrentPage(page);
+  };
+
+  const viewReport = (product: ScannedProduct) => {
+    setSelectedProduct(product);
+  };
+
   const renderPage = () => {
+    // If a specific report is selected, show the detail report page
+    if (selectedProduct) {
+      return (
+        <ReportDetail 
+          product={selectedProduct} 
+          onBack={() => setSelectedProduct(null)} 
+        />
+      );
+    }
+
     switch (currentPage) {
-      case 'recipes':
-        return <Recipes onNavigateHome={() => setCurrentPage('home')} />;
-      case 'analytics':
+      case 'scan':
         return (
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="text-center">
-              <div className="text-6xl mb-4">📊</div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Analytics Coming Soon</h2>
-              <p className="text-gray-500 dark:text-gray-400">Track your food waste and savings over time.</p>
-            </div>
-          </div>
+          <ScanProduct 
+            onNavigate={navigateToPage} 
+            onSelectProduct={viewReport} 
+          />
+        );
+      case 'repository':
+        return (
+          <Repository 
+            onSelectProduct={viewReport} 
+          />
         );
       default:
-        return <Dashboard />;
+        return (
+          <Dashboard 
+            onNavigate={navigateToPage} 
+            onSelectProduct={viewReport} 
+          />
+        );
     }
   };
 
   return (
-    <InventoryProvider>
-      <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+    <ProductProvider>
+      <Layout currentPage={currentPage} onNavigate={navigateToPage}>
         {renderPage()}
       </Layout>
-    </InventoryProvider>
+    </ProductProvider>
   );
 }
 

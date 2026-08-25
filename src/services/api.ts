@@ -66,38 +66,28 @@ export const authAPI = {
     }
 };
 
-// Items API
-export const itemsAPI = {
+// Products API
+export const productsAPI = {
     getAll: async () => {
-        return fetchWithAuth('/items');
+        return fetchWithAuth('/products');
     },
 
-    create: async (item: {
-        name: string;
-        quantity: number;
-        unit: string;
-        category: string;
-        expiryDate: string;
-        isOpened?: boolean;
-        reminderDays?: number;
-        reminderEmail?: string;
-        reminderPhone?: string;
-    }) => {
-        return fetchWithAuth('/items', {
+    create: async (product: Record<string, any>) => {
+        return fetchWithAuth('/products', {
             method: 'POST',
-            body: JSON.stringify(item)
+            body: JSON.stringify(product)
         });
     },
 
-    update: async (id: string, updates: Record<string, unknown>) => {
-        return fetchWithAuth(`/items/${id}`, {
+    update: async (id: string, updates: Record<string, any>) => {
+        return fetchWithAuth(`/products/${id}`, {
             method: 'PUT',
             body: JSON.stringify(updates)
         });
     },
 
     delete: async (id: string) => {
-        return fetchWithAuth(`/items/${id}`, {
+        return fetchWithAuth(`/products/${id}`, {
             method: 'DELETE'
         });
     }

@@ -1,56 +1,36 @@
-# 🥗 SmartBite - Intelligent Food Inventory Manager
+# ⚖️ Legal Metrology Compliance Checker
 
-<div align="center">
+An automated, AI-powered compliance checking system developed under the **Legal Metrology Act, 2009** and the **Legal Metrology (Packaged Commodities) Rules, 2011**. 
 
-![SmartBite Banner](https://img.shields.io/badge/SmartBite-Food_Inventory_Manager-10B981?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTExIDIwQTcgNyAwIDAgMSA5LjggNi4xQzE1LjUgNSAxNyA0LjQ4IDE5IDIuMWMuMy4zNS41LjcuNSAxLjEgMCAyLjE0LTIgNS4yLTIgNS4yLjUuNSAxIDYgMSA2LTEuNS03LTctOC02LjgtOC4zIi8+PHBhdGggZD0iTTUgMjFhMSAxIDAgMCAxLTEtMXYtOGEzIDMgMCAwIDEgMy01bDEwIDEwYTMgMyAwIDAgMSA1IDN2MWExIDEgMCAwIDEtMSAxWiIvPjwvc3ZnPg==)
-
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
-[![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat-square&logo=vercel)](https://vercel.com/)
-
-**Track your food inventory, reduce waste, and get smart recipe suggestions based on what's expiring soon.**
-
-[Live Demo](https://smart-bite-beryl.vercel.app) • [Report Bug](https://github.com/Srujan-AI-ML/Smart-Bite/issues) • [Request Feature](https://github.com/Srujan-AI-ML/Smart-Bite/issues)
-
-</div>
+This system automatically detects, extracts, and validates mandatory declarations on packaged commodity labels, product listings, and packaging images to identify violations and streamline inspections for enforcement agencies in India.
 
 ---
 
 ## ✨ Features
 
-### 📦 Inventory Management
-- **Add items** with name, quantity, unit, category, and expiry date
-- **Barcode scanning** - scan products to auto-fill details
-- **Camera capture** - take photos for visual reference
-- **Smart categorization** - Dairy, Meat, Vegetables, Grains, and more
+### 🔍 Automated Packaging Scanning
+- **High-Accuracy OCR**: Scans packaging labels and extracts raw text using Google Cloud Vision API.
+- **Dynamic Input**: Supports camera capture (direct photo of packaging), file uploads, and manual text override.
+- **Barcode Lookup**: Extracts product barcodes and queries Open Food Facts / UPC registries.
 
-### ⏰ Expiry Tracking
-- **Visual status indicators** - Good, Expiring Soon, Expired
-- **Opened item tracking** - automatic expiry adjustment when items are opened
-- **Smart notifications** - never forget about expiring items
+### ⚖️ Rules Engine (LM Packaged Commodities Rules, 2011)
+Validates all 10 mandatory declarations required on packaged goods:
+1. **Generic/Common Product Name**
+2. **Net Quantity** (in standard weight, volume, or count format)
+3. **Date of Manufacture/Packing/Import** (Month & Year)
+4. **Maximum Retail Price (MRP)** (inclusive of all taxes)
+5. **Manufacturer/Packer/Importer Details** (complete name and physical address)
+6. **Consumer Care Details** (helpline number and contact email)
+7. **Best Before/Expiry Date** (for perishables)
+8. **Country of Origin** (mandatory declaration for imported goods)
+9. **FSSAI License Number** (validated for food items)
+10. **Retail Sale Unit Price** (price representation check)
 
-### 📧 Email Reminders
-- **Customizable reminder days** - get notified before items expire
-- **Recipe suggestions** - receive recipes using your expiring ingredients
-- **Powered by EmailJS** - reliable email delivery
-
-### 🍳 Recipe Integration
-- **TheMealDB API** - discover recipes based on your inventory
-- **Ingredient matching** - prioritizes recipes using your existing items
-- **Step-by-step instructions** - complete cooking guides
-
-### 👤 User Authentication
-- **Username/password login** - secure authentication with JWT
-- **Cloud sync** - access your inventory from any device
-- **MongoDB Atlas** - reliable data persistence
-
-### 🎨 Premium UI/UX
-- **Dark/Light mode** - comfortable viewing any time
-- **Glassmorphism design** - modern, elegant interface
-- **Responsive layout** - works on desktop, tablet, and mobile
-- **Smooth animations** - delightful micro-interactions
+### 📊 Enforcement Dashboard & Repository
+- **Digital Audit Trail**: Keeps a persistent log of all scanned products, compliance scores, and violations in MongoDB Atlas.
+- **Analytics Overview**: Visualizes total inspections, compliant vs. non-compliant percentages, and average scores.
+- **Search & Retrieve**: Easily find previous inspections by product name, date, or barcode.
+- **PDF Report Generation**: Exports clean, formatted, print-ready inspection reports and violation summaries.
 
 ---
 
@@ -59,168 +39,72 @@
 | Category | Technologies |
 |----------|-------------|
 | **Frontend** | React 18, TypeScript, Tailwind CSS, Vite |
-| **Backend** | Vercel Serverless Functions |
+| **Backend** | Vercel Serverless Functions (Node.js) |
 | **Database** | MongoDB Atlas |
 | **Authentication** | JWT, bcryptjs |
-| **APIs** | TheMealDB, Open Food Facts, EmailJS |
-| **Deployment** | Vercel |
-| **Icons** | Lucide React |
+| **OCR & APIs** | Google Cloud Vision API, Open Food Facts, UPCitemdb |
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
-- MongoDB Atlas account
-- EmailJS account (for reminders)
+- MongoDB Atlas cluster
+- Google Cloud Vision API Key / Service Account credentials (optional; fallback to browser scanner and manual text mode works out of the box)
 
-### Installation
+### Installation & Run
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Srujan-AI-ML/Smart-Bite.git
-   cd Smart-Bite
-   ```
-
-2. **Install dependencies**
+1. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. **Set up environment variables**
-   
-   Create a `.env` file in the root directory:
+2. **Set up your environment variables**
+   Create a `.env` file in the root directory (or edit the template):
    ```env
-   # MongoDB
+   # MongoDB Connection (Required)
    MONGODB_URI=mongodb+srv://your_user:your_password@cluster.mongodb.net/smartbite
    
-   # JWT Secret
-   JWT_SECRET=your-super-secret-key
+   # JWT Secret for Auth (Required)
+   JWT_SECRET=your-jwt-secret-key
    
-   # EmailJS (for email reminders)
-   VITE_EMAILJS_SERVICE_ID=your_service_id
-   VITE_EMAILJS_TEMPLATE_ID=your_template_id
-   VITE_EMAILJS_PUBLIC_KEY=your_public_key
+   # Google Cloud Vision (Optional - for OCR text extraction)
+   VITE_GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+   VITE_GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
    ```
 
-4. **Run the development server**
+3. **Run the development server**
    ```bash
    npm run dev
    ```
 
-5. **Open in browser**
-   ```
-   http://localhost:5173
-   ```
+4. **Open in browser**
+   Visit `http://localhost:5173` to test the application.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-SmartBite/
-├── api/                      # Vercel Serverless Functions
-│   ├── auth/
-│   │   ├── login.js         # User login
-│   │   └── register.js      # User registration
-│   ├── items/
-│   │   ├── index.js         # GET/POST items
-│   │   └── [id].js          # PUT/DELETE items
-│   ├── lib/
-│   │   ├── auth.js          # JWT utilities
-│   │   └── mongodb.js       # Database connection
-│   └── health.js            # Health check endpoint
-├── src/
-│   ├── components/          # React components
-│   ├── context/             # React context providers
-│   ├── pages/               # Page components
-│   ├── services/            # API services
-│   ├── types.ts             # TypeScript types
-│   └── utils/               # Utility functions
-├── public/                  # Static assets
-└── index.html               # Entry point
+├── api/                  # Vercel Serverless Functions (Backend)
+│   ├── auth/             # Login, Registration, and Google Auth
+│   ├── products/         # Scan saving, retrieval, and deletion API
+│   ├── lib/              # JWT verification and MongoDB connections
+│   └── health.js         # API server health check
+├── src/                  # Frontend (React App)
+│   ├── components/       # Layout, settings panel, camera capture modals
+│   ├── context/          # Auth context and Products/Scans state context
+│   ├── pages/            # Dashboard, Scan Product, Repository, and detailed Report pages
+│   ├── services/         # API fetching, regex compliance checking, and OCR service
+│   ├── types.ts          # TypeScript type definitions for compliance records
+│   └── main.tsx          # React application entry point
+├── vite.config.ts        # Vite configuration & local development API proxy server
+└── .env                  # Configuration keys (locally stored only)
 ```
 
 ---
 
-## 🔌 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Create new user |
-| POST | `/api/auth/login` | Login user |
-
-### Inventory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/items` | Get all user items |
-| POST | `/api/items` | Add new item |
-| PUT | `/api/items/:id` | Update item |
-| DELETE | `/api/items/:id` | Delete item |
-
-### Utility
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-
----
-
-## 🌐 Deployment
-
-### Deploy to Vercel
-
-1. **Push to GitHub**
-   ```bash
-   git add -A
-   git commit -m "Initial commit"
-   git push origin main
-   ```
-
-2. **Import to Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Import your GitHub repository
-   - Add environment variables in Settings
-
-3. **Done!** Your app is live 🎉
-
----
-
-## 🔮 Future Improvements
-
-- [ ] Shopping list generation
-- [ ] Pantry analytics & insights
-- [ ] Multi-language support
-- [ ] PWA with offline support
-- [ ] Share recipes with friends
-- [ ] Integration with grocery delivery apps
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
 ## 📄 License
-
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**⭐ Star this repo if you found it helpful! ⭐**
-
-Made with ❤️ and React
-
-</div>
