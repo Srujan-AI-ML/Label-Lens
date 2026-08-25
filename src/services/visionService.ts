@@ -265,6 +265,8 @@ export async function detectBarcode(base64Image: string): Promise<string | null>
         return detectBarcodeViaBrowser(base64Image);
     }
 
+    const accessToken = await getAccessToken();
+
     const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
         method: 'POST',
         headers: {
