@@ -69,6 +69,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
 
                     {/* Right Actions */}
                     <div className="flex items-center gap-2">
+                        {/* + Add / Scan Product Button */}
+                        <button
+                            onClick={() => onNavigate('scan')}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                        >
+                            <span className="text-base leading-none font-normal">+</span>
+                            <span className="hidden sm:inline">Add / Scan Product</span>
+                            <span className="sm:hidden">Scan</span>
+                        </button>
+
                         {/* Settings Button */}
                         <button
                             onClick={() => setShowSettings(true)}

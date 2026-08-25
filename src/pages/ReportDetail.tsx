@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Printer, Edit2, Check } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Printer, Edit2, Upload } from 'lucide-react';
 
 interface ReportDetailProps {
     product: ScannedProduct;
@@ -42,32 +42,33 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
     };
 
     const declarationLabels: Record<keyof typeof product.declarations, { label: string; desc: string; mandatory: boolean }> = {
-        genericName: { label: 'Generic / Common Name', desc: 'Generic description of the product', mandatory: true },
-        manufacturer: { label: 'Manufacturer / Packer Name & Address', desc: 'Complete identity & physical location details', mandatory: true },
-        netQuantity: { label: 'Net Quantity', desc: 'Standard weight, volume, or numerical count declaration', mandatory: true },
-        manufactureDate: { label: 'Month & Year of Manufacture / Packing', desc: 'Date indicating when the product was packed', mandatory: true },
+        genericName: { label: 'Generic / Common Name', desc: 'Generic description of product', mandatory: true },
+        netQuantity: { label: 'Net Quantity', desc: 'Standard weight, volume, or count declaration', mandatory: true },
         mrp: { label: 'Maximum Retail Price (MRP)', desc: 'Consumer price inclusive of all taxes', mandatory: true },
-        consumerCare: { label: 'Consumer Care Contact Details', desc: 'Phone, email, and address for complaints', mandatory: true },
+        manufactureDate: { label: 'Month & Year of Manufacture / Packing', desc: 'Date indicating when product was packed', mandatory: true },
         bestBefore: { label: 'Best Before / Expiry Date', desc: 'Date of expiration/perishability', mandatory: false },
-        countryOfOrigin: { label: 'Country of Origin', desc: 'Place of manufacture (mandatory for imported goods)', mandatory: false },
+        manufacturer: { label: 'Manufacturer / Packer Name & Address', desc: 'Complete identity & location details', mandatory: true },
+        consumerCare: { label: 'Consumer Care Contact Details', desc: 'Phone, email, and address for complaints', mandatory: true },
         fssaiLicense: { label: 'FSSAI License Number', desc: '14-digit food safety registration', mandatory: false },
-        retailSalePrice: { label: 'Retail Sale Price per Unit', desc: 'Unit price representation (e.g. Price per gram)', mandatory: false },
+        countryOfOrigin: { label: 'Country of Origin', desc: 'Place of manufacture (mandatory for imports)', mandatory: false },
+        retailSalePrice: { label: 'Retail Sale Price per Unit', desc: 'Unit price representation (Price per gram/ml)', mandatory: false },
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-8 printable-report">
+        <div className="max-w-5xl mx-auto px-4 py-8 printable-report">
             {/* Action Bar (hidden in print) */}
-            <div className="flex items-center justify-between gap-4 mb-6 no-print">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 no-print">
                 <button
                     onClick={onBack}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded-xl text-sm font-bold shadow-sm border border-gray-200 dark:border-gray-700 transition-all cursor-pointer"
                 >
                     <ArrowLeft size={16} />
-                    Back to inspections
+                    Return to Dashboard
                 </button>
+
                 <button
                     onClick={handlePrint}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded-xl font-bold text-sm transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
                 >
                     <Printer size={16} />
                     Print / Export PDF Report
@@ -80,11 +81,11 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(product.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
                     <div>
                         <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
-                            Official Compliance Report
+                            Official Legal Metrology Inspection Certificate
                         </span>
                         <h1 className="text-2xl md:text-3xl font-black mt-2">{product.productName}</h1>
                         <p className="text-xs text-white/80 mt-1">
-                            Scanned ID: {product.id} • Date: {new Date(product.scannedAt).toLocaleString()}
+                            Inspection ID: {product.id} • Date: {new Date(product.scannedAt).toLocaleString()}
                         </p>
                     </div>
                     <div className="text-center sm:text-right">
@@ -108,25 +109,25 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         <div>
                             <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Category</span>
                             <span className="font-bold text-gray-900 dark:text-white mt-1 block">
-                                {product.category || 'General Commodity'}
+                                {product.category || 'Packaged Commodity'}
                             </span>
                         </div>
                         <div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Legal Framework</span>
-                            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-1 block">
-                                LM (Packaged Commodities) Rules, 2011
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Legal Act</span>
+                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">
+                                Legal Metrology (Packaged Commodities) Rules, 2011
                             </span>
                         </div>
                     </div>
 
                     {/* Left/Right layout for image preview and checklist */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-                        {/* Packaging Image */}
-                        <div className="md:col-span-1">
-                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Supporting Evidence</h3>
-                            <div className="w-full h-64 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden flex items-center justify-center text-5xl">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        {/* Packaging Evidence Image */}
+                        <div className="lg:col-span-1">
+                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Packaging Photo Evidence</h3>
+                            <div className="w-full h-72 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden flex items-center justify-center text-5xl">
                                 {product.imageData ? (
-                                    <img src={product.imageData} alt="Product label" className="w-full h-full object-cover" />
+                                    <img src={product.imageData} alt="Product label photo" className="w-full h-full object-contain bg-black" />
                                 ) : (
                                     '📦'
                                 )}
@@ -134,41 +135,50 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
 
                         {/* List of declarations check */}
-                        <div className="md:col-span-2">
-                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Declaration Checklist</h3>
-                            <div className="space-y-4">
-                                {(Object.keys(product.declarations) as Array<keyof typeof product.declarations>).map((key) => {
-                                    const item = product.declarations[key];
+                        <div className="lg:col-span-2">
+                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">
+                                Rules, 2011 Declaration Checklist
+                            </h3>
+                            <div className="space-y-3">
+                                {(Object.keys(declarationLabels) as Array<keyof typeof declarationLabels>).map((key) => {
+                                    const item = product.declarations[key] || { present: false, value: null };
                                     const meta = declarationLabels[key];
                                     return (
-                                        <div key={key} className="flex items-start justify-between gap-4 p-3 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 dark:border-gray-800">
-                                            <div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white">{meta.label}</h4>
+                                        <div key={key} className={`flex items-center justify-between gap-4 p-3.5 rounded-2xl border ${
+                                            item.present
+                                                ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
+                                                : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/30'
+                                        }`}>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={item.present}
+                                                        readOnly
+                                                        className="w-4 h-4 rounded text-indigo-600 cursor-default"
+                                                    />
+                                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{meta.label}</h4>
                                                     {meta.mandatory && (
                                                         <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase">
                                                             Mandatory
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-[10px] text-gray-400 mt-0.5">{meta.desc}</p>
                                                 {item.present && item.value && (
-                                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700 px-2 py-1 rounded-lg mt-2 inline-block max-w-[400px] truncate">
+                                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700 px-2.5 py-1 rounded-lg mt-1.5 inline-block max-w-[380px] truncate">
                                                         "{item.value}"
                                                     </p>
                                                 )}
                                             </div>
-                                            <div>
+                                            <div className="shrink-0">
                                                 {item.present ? (
-                                                    <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
-                                                        <CheckCircle2 size={16} />
-                                                        <span>Detected</span>
-                                                    </div>
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                                                        ✔️ Pass
+                                                    </span>
                                                 ) : (
-                                                    <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold text-xs">
-                                                        <XCircle size={16} />
-                                                        <span>Missing</span>
-                                                    </div>
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
+                                                        ❌ Fail
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
@@ -249,19 +259,6 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                 </button>
                             </div>
                         )}
-                    </div>
-
-                    {/* Raw Text Output (collapsible) */}
-                    <div className="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700/50 no-print">
-                        <details className="cursor-pointer group">
-                            <summary className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase list-none flex items-center justify-between">
-                                <span>Raw Extracted Label Text</span>
-                                <span className="group-open:rotate-180 transition-transform">▼</span>
-                            </summary>
-                            <pre className="mt-3 p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl text-[10px] text-gray-500 font-mono whitespace-pre-wrap overflow-x-auto">
-                                {product.rawExtractedText || 'No raw text stored.'}
-                            </pre>
-                        </details>
                     </div>
                 </div>
             </div>

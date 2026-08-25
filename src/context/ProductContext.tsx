@@ -17,8 +17,14 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export const ProductProvider = ({ children }: { children: ReactNode }) => {
     const { isAuthenticated } = useAuth();
-    const [products, setProducts] = useState<ScannedProduct[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [products, setProducts] = useState<ScannedProduct[]>(() => {
+        const cached = localStorage.getItem('lm-scanned-products');
+        if (cached) {
+            try { return JSON.parse(cached); } catch { }
+        }
+        return [];
+    });
+    const [isLoading, setIsLoading] = useState<boolean>(false);
     const [stats, setStats] = useState<ComplianceStats>({
         total: 0,
         compliant: 0,
@@ -27,7 +33,7 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         averageScore: 0
     });
 
-    const calculateStats = (productList: ScannedProduct[]) => {
+    const calculateStats = useCallback((productList: ScannedProduct[]) => {
         const total = productList.length;
         if (total === 0) {
             setStats({ total: 0, compliant: 0, partiallyCompliant: 0, nonCompliant: 0, averageScore: 0 });
@@ -40,7 +46,7 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         let sumScore = 0;
 
         productList.forEach(p => {
-            sumScore += p.complianceScore;
+            sumScore += (p.complianceScore || 0);
             if (p.complianceStatus === 'Compliant') compliant++;
             else if (p.complianceStatus === 'Partially Compliant') partiallyCompliant++;
             else if (p.complianceStatus === 'Non-Compliant') nonCompliant++;
@@ -53,72 +59,71 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
             nonCompliant,
             averageScore: Math.round(sumScore / total)
         });
-    };
+    }, []);
+
+    // Sync localStorage whenever products state updates
+    useEffect(() => {
+        calculateStats(products);
+        localStorage.setItem('lm-scanned-products', JSON.stringify(products));
+    }, [products, calculateStats]);
 
     const refetchProducts = useCallback(async () => {
         if (!isAuthenticated) return;
         try {
-            setIsLoading(true);
             const data = await productsAPI.getAll();
-            setProducts(data);
-            calculateStats(data);
+            if (Array.isArray(data)) {
+                setProducts(data);
+            }
         } catch (error) {
-            console.error('Failed to fetch products:', error);
-        } finally {
-            setIsLoading(false);
+            console.error('Background fetch products warning:', error);
         }
     }, [isAuthenticated]);
 
-    // Load products on auth change
+    // Background fetch on auth
     useEffect(() => {
         if (isAuthenticated) {
             refetchProducts();
         } else {
             setProducts([]);
-            setIsLoading(false);
         }
     }, [isAuthenticated, refetchProducts]);
 
     const addScanResult = async (productData: Omit<ScannedProduct, 'id'>) => {
+        // Optimistic local add
+        const tempId = 'temp-' + Date.now();
+        const optimisticProduct: ScannedProduct = { ...productData, id: tempId };
+        
+        setProducts(prev => [optimisticProduct, ...prev]);
+
         try {
             const saved = await productsAPI.create(productData);
-            setProducts(prev => {
-                const next = [saved, ...prev];
-                calculateStats(next);
-                return next;
-            });
+            setProducts(prev => prev.map(p => p.id === tempId ? saved : p));
             return saved;
         } catch (error) {
-            console.error('Failed to save scan result:', error);
-            throw error;
+            console.warn('API save failed, keeping offline scan:', error);
+            return optimisticProduct;
         }
     };
 
     const updateNotes = async (id: string, notes: string) => {
+        setProducts(prev => prev.map(p => p.id === id ? { ...p, notes } : p));
         try {
-            const updated = await productsAPI.update(id, { notes });
-            setProducts(prev => {
-                const next = prev.map(p => p.id === id ? updated : p);
-                calculateStats(next);
-                return next;
-            });
+            if (!id.startsWith('temp-')) {
+                await productsAPI.update(id, { notes });
+            }
         } catch (error) {
-            console.error('Failed to update notes:', error);
-            throw error;
+            console.error('Failed to update notes on server:', error);
         }
     };
 
     const removeScanRecord = async (id: string) => {
+        setProducts(prev => prev.filter(p => p.id !== id));
         try {
-            await productsAPI.delete(id);
-            setProducts(prev => {
-                const next = prev.filter(p => p.id !== id);
-                calculateStats(next);
-                return next;
-            });
+            if (!id.startsWith('temp-')) {
+                await productsAPI.delete(id);
+            }
         } catch (error) {
-            console.error('Failed to delete scan record:', error);
-            throw error;
+            console.error('Failed to delete scan record on server:', error);
         }
     };
 

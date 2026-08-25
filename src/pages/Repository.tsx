@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Search, Filter, Trash2, Calendar, FileText, ChevronRight } from 'lucide-react';
+import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus } from 'lucide-react';
 import type { ScannedProduct } from '../types';
 
 interface RepositoryProps {
+    onNavigate: (page: 'home' | 'scan' | 'repository') => void;
     onSelectProduct: (product: ScannedProduct) => void;
 }
 
-export const Repository: React.FC<RepositoryProps> = ({ onSelectProduct }) => {
-    const { products, removeScanRecord, isLoading } = useProduct();
+export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProduct }) => {
+    const { products, removeScanRecord } = useProduct();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -42,19 +43,27 @@ export const Repository: React.FC<RepositoryProps> = ({ onSelectProduct }) => {
         return matchesSearch && matchesStatus;
     });
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-500 dark:text-gray-400">Loading inspection repository...</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
+            {/* Top Navigation & Return Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <button
+                    onClick={() => onNavigate('home')}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded-xl text-sm font-bold shadow-sm border border-gray-200 dark:border-gray-700 transition-all cursor-pointer"
+                >
+                    <ArrowLeft size={16} />
+                    Return to Dashboard
+                </button>
+
+                <button
+                    onClick={() => onNavigate('scan')}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                >
+                    <Plus size={16} />
+                    + Add / Scan Product
+                </button>
+            </div>
+
             {/* Header */}
             <div className="mb-8">
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">

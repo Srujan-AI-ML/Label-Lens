@@ -66,6 +66,7 @@ function AppContent() {
       case 'repository':
         return (
           <Repository 
+            onNavigate={navigateToPage}
             onSelectProduct={viewReport} 
           />
         );
