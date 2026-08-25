@@ -61,11 +61,11 @@ export const AddItemForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         try {
             const base64Data = imageSrc.split(',')[1];
 
-            // Detect barcode from image
+            // Detect barcode from image (uses browser BarcodeDetector or Cloud Vision)
             const barcode = await detectBarcode(base64Data);
 
             if (!barcode) {
-                alert("No barcode found in image. Please try a clearer image of the barcode.");
+                alert("No barcode found in image.\n\nTips:\n• Hold the barcode steady and well-lit\n• Make sure the barcode fills most of the frame\n• Try again with a clearer photo");
                 return;
             }
 
@@ -93,12 +93,13 @@ export const AddItemForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             }
         } catch (err) {
             console.error('Barcode scan error:', err);
-            alert("Failed to process barcode. Please try again.");
+            alert("Failed to process barcode. Please try again with a clearer image.");
         } finally {
             setScanningType(null);
             setScanStatus('');
         }
     };
+
 
     // Process expiry date image with OCR
     const processExpiryImage = async (imageSrc: string) => {

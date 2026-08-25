@@ -16,10 +16,19 @@ const SERVICE_ACCOUNT = {
     token_uri: "https://oauth2.googleapis.com/token"
 };
 
+// Check if Google Cloud Vision credentials are configured
+const hasVisionCredentials = (): boolean => {
+    return !!(SERVICE_ACCOUNT.client_email && SERVICE_ACCOUNT.private_key);
+};
+
 let cachedToken: { token: string; expiry: number } | null = null;
 
 // Get access token using service account JWT
 async function getAccessToken(): Promise<string> {
+    if (!hasVisionCredentials()) {
+        throw new Error('Google Cloud Vision credentials are not configured.');
+    }
+
     // Return cached token if still valid
     if (cachedToken && Date.now() < cachedToken.expiry - 60000) {
         return cachedToken.token;
@@ -212,9 +221,49 @@ export interface ProductInfo {
     barcode: string;
 }
 
+// Detect barcode using browser BarcodeDetector API (free, no credentials needed)
+async function detectBarcodeViaBrowser(base64Image: string): Promise<string | null> {
+    // BarcodeDetector is supported in Chrome/Edge
+    if (!('BarcodeDetector' in window)) {
+        console.log('BarcodeDetector API not supported in this browser.');
+        return null;
+    }
+
+    try {
+        // @ts-ignore - BarcodeDetector is not in TS types yet
+        const detector = new BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code']
+        });
+
+        // Convert base64 to ImageBitmap
+        const response = await fetch(`data:image/jpeg;base64,${base64Image}`);
+        const blob = await response.blob();
+        const bitmap = await createImageBitmap(blob);
+
+        const barcodes = await detector.detect(bitmap);
+        bitmap.close();
+
+        if (barcodes && barcodes.length > 0) {
+            const barcode = barcodes[0].rawValue;
+            console.log('✅ Browser BarcodeDetector found:', barcode);
+            return barcode;
+        }
+
+        console.log('No barcode detected by browser BarcodeDetector.');
+        return null;
+    } catch (err) {
+        console.log('Browser BarcodeDetector error:', err);
+        return null;
+    }
+}
+
 // Detect barcode from image using Cloud Vision
 export async function detectBarcode(base64Image: string): Promise<string | null> {
-    const accessToken = await getAccessToken();
+    // If Google Cloud Vision is not configured, use the browser BarcodeDetector API
+    if (!hasVisionCredentials()) {
+        console.log('Google Cloud Vision not configured — using browser BarcodeDetector.');
+        return detectBarcodeViaBrowser(base64Image);
+    }
 
     const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
         method: 'POST',
