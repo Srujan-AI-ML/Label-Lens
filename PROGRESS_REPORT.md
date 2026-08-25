@@ -1,7 +1,7 @@
 # SmartBite - Project Progress Report
 
 **Date:** January 8, 2026  
-**Student:** Sai Mani  
+**Student:** Srujan  
 **Project:** SmartBite - Intelligent Food Inventory Manager
 
 ---
@@ -224,7 +224,7 @@ Items Collection:
 
 ## 📁 Repository
 
-**GitHub:** https://github.com/saimani1232/Smart-Bite  
+**GitHub:** https://github.com/Srujan-AI-ML/Smart-Bite  
 **Live Demo:** https://smart-bite-beryl.vercel.app
 
 ---

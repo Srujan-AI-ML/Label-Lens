@@ -12,7 +12,7 @@
 
 **Track your food inventory, reduce waste, and get smart recipe suggestions based on what's expiring soon.**
 
-[Live Demo](https://smart-bite-beryl.vercel.app) • [Report Bug](https://github.com/saimani1232/SmartBite/issues) • [Request Feature](https://github.com/saimani1232/SmartBite/issues)
+[Live Demo](https://smart-bite-beryl.vercel.app) • [Report Bug](https://github.com/Srujan-AI-ML/Smart-Bite/issues) • [Request Feature](https://github.com/Srujan-AI-ML/Smart-Bite/issues)
 
 </div>
 
@@ -80,8 +80,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/saimani1232/SmartBite.git
-   cd SmartBite
+   git clone https://github.com/Srujan-AI-ML/Smart-Bite.git
+   cd Smart-Bite
    ```
 
 2. **Install dependencies**
@@ -216,12 +216,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## 👨‍💻 Author
-
-**Sai Mani**
-
-- GitHub: [@saimani1232](https://github.com/saimani1232)
 
 ---
 
