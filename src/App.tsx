@@ -5,17 +5,19 @@ import { ScanProduct } from './pages/ScanProduct';
 import { Repository } from './pages/Repository';
 import { ReportDetail } from './pages/ReportDetail';
 import { LoginPage } from './pages/LoginPage';
+import { AddProductModal } from './components/AddProductModal';
 import { ProductProvider } from './context/ProductContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import type { ScannedProduct } from './types';
 
-export type PageType = 'home' | 'scan' | 'repository';
+export type PageType = 'home' | 'scan' | 'products';
 
 // Main app content (protected)
 function AppContent() {
   const [currentPage, setCurrentPage] = useState<PageType>('home');
   const [selectedProduct, setSelectedProduct] = useState<ScannedProduct | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
 
   // Show loading while checking auth
@@ -63,11 +65,12 @@ function AppContent() {
             onSelectProduct={viewReport} 
           />
         );
-      case 'repository':
+      case 'products':
         return (
           <Repository 
             onNavigate={navigateToPage}
             onSelectProduct={viewReport} 
+            onOpenAddModal={() => setIsAddModalOpen(true)}
           />
         );
       default:
@@ -75,6 +78,7 @@ function AppContent() {
           <Dashboard 
             onNavigate={navigateToPage} 
             onSelectProduct={viewReport} 
+            onOpenAddModal={() => setIsAddModalOpen(true)}
           />
         );
     }
@@ -82,9 +86,20 @@ function AppContent() {
 
   return (
     <ProductProvider>
-      <Layout currentPage={currentPage} onNavigate={navigateToPage}>
+      <Layout 
+        currentPage={currentPage} 
+        onNavigate={navigateToPage}
+        onOpenAddModal={() => setIsAddModalOpen(true)}
+      >
         {renderPage()}
       </Layout>
+
+      {/* Global Add Product / Scan Modal Popup */}
+      <AddProductModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onViewReport={viewReport}
+      />
     </ProductProvider>
   );
 }

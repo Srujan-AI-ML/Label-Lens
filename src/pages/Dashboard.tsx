@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { ShieldCheck, ShieldAlert, FileText, Activity, ArrowRight, BookOpen, Scale, Award, X, ExternalLink, Trash2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileText, ArrowRight, BookOpen, Scale, Award, X, ExternalLink, Trash2, Plus, ScanLine } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
+import type { PageType } from '../App';
 
 interface DashboardProps {
-    onNavigate: (page: 'home' | 'scan' | 'repository') => void;
+    onNavigate: (page: PageType) => void;
     onSelectProduct: (product: ScannedProduct) => void;
+    onOpenAddModal?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduct }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduct, onOpenAddModal }) => {
     const { products, stats, removeScanRecord } = useProduct();
     const [selectedSideProduct, setSelectedSideProduct] = useState<ScannedProduct | null>(null);
 
@@ -23,28 +25,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
         }
     };
 
-    const recentScans = products.slice(0, 5);
+    const recentScans = products.slice(0, 6);
 
     const declarationTitles: Array<{ key: keyof ComplianceDeclarations; label: string }> = [
-        { key: 'genericName', label: 'Generic / Common Name' },
-        { key: 'netQuantity', label: 'Net Quantity' },
-        { key: 'mrp', label: 'Maximum Retail Price (MRP)' },
-        { key: 'manufactureDate', label: 'Date of Mfg / Packing' },
-        { key: 'bestBefore', label: 'Best Before / Expiry' },
-        { key: 'manufacturer', label: 'Manufacturer & Address' },
-        { key: 'consumerCare', label: 'Consumer Care Helpline' },
-        { key: 'fssaiLicense', label: 'FSSAI License No.' },
-        { key: 'countryOfOrigin', label: 'Country of Origin' },
-        { key: 'retailSalePrice', label: 'Retail Sale Unit Price' },
+        { key: 'genericName', label: '1. Generic / Common Name' },
+        { key: 'netQuantity', label: '2. Net Quantity (Weight/Vol/Count)' },
+        { key: 'mrp', label: '3. Maximum Retail Price (MRP)' },
+        { key: 'manufactureDate', label: '4. Date of Mfg / Packing' },
+        { key: 'bestBefore', label: '5. Best Before / Expiry' },
+        { key: 'manufacturer', label: '6. Manufacturer & Address' },
+        { key: 'consumerCare', label: '7. Consumer Care Helpline' },
+        { key: 'fssaiLicense', label: '8. FSSAI License No.' },
+        { key: 'countryOfOrigin', label: '9. Country of Origin' },
+        { key: 'retailSalePrice', label: '10. Retail Sale Unit Price' },
     ];
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (window.confirm('Delete this inspection record?')) {
+        if (window.confirm('Delete this product inspection record?')) {
             await removeScanRecord(id);
             if (selectedSideProduct?.id === id) {
                 setSelectedSideProduct(null);
             }
+        }
+    };
+
+    const handleAddClick = () => {
+        if (onOpenAddModal) {
+            onOpenAddModal();
+        } else {
+            onNavigate('scan');
         }
     };
 
@@ -57,17 +67,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         <Scale className="text-indigo-600 dark:text-indigo-400" />
                         Legal Metrology Compliance Checker
                     </h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">
-                        Assess, validate and verify mandatory declarations under Legal Metrology Rules, 2011.
+                    <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+                        Assess, validate and verify mandatory declarations under Legal Metrology (Packaged Commodities) Rules, 2011.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => onNavigate('scan')}
-                        className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/35 transition-all text-sm cursor-pointer"
+                        onClick={handleAddClick}
+                        className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/35 transition-all text-xs sm:text-sm cursor-pointer hover:scale-105 active:scale-95"
                     >
-                        <Activity size={16} />
-                        + Start New Scan / Add Product
+                        <Plus size={18} />
+                        + Add New Product / Scan
                     </button>
                 </div>
             </div>
@@ -79,7 +89,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         <FileText size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Total Scanned</p>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Scanned</p>
                         <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.total}</p>
                     </div>
                 </div>
@@ -89,7 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         <ShieldCheck size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Fully Compliant</p>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Fully Compliant</p>
                         <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.compliant}</p>
                     </div>
                 </div>
@@ -99,7 +109,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         <ShieldAlert size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Non-Compliant</p>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Non-Compliant</p>
                         <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.nonCompliant}</p>
                     </div>
                 </div>
@@ -109,7 +119,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         <Award size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Avg. Compliance Score</p>
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Avg. Compliance</p>
                         <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.averageScore}%</p>
                     </div>
                 </div>
@@ -121,38 +131,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                 <div className="lg:col-span-2">
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 h-full">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Recent Inspections</h2>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Recent Inspections</h2>
                             <button
-                                onClick={() => onNavigate('repository')}
-                                className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 cursor-pointer"
+                                onClick={() => onNavigate('products')}
+                                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 cursor-pointer"
                             >
-                                View All Scans
+                                View All Products
                                 <ArrowRight size={14} />
                             </button>
                         </div>
 
                         {recentScans.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <div className="text-5xl mb-3">📁</div>
+                                <div className="text-5xl mb-3">📦</div>
                                 <h3 className="text-base font-bold text-gray-700 dark:text-gray-300">No scanned products yet</h3>
-                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2 max-w-sm">
-                                    Click <strong>"+ Start New Scan / Add Product"</strong> above to scan packaging or enter details.
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 max-w-sm">
+                                    Click <strong>"+ Add New Product / Scan"</strong> above to scan packaging or enter details.
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-3.5">
                                 {recentScans.map((p) => (
                                     <div
                                         key={p.id}
                                         onClick={() => setSelectedSideProduct(p)}
-                                        className={`flex items-center justify-between p-4 rounded-2xl transition-all cursor-pointer border ${
+                                        className={`flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border ${
                                             selectedSideProduct?.id === p.id
-                                                ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-md'
+                                                ? 'bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-400 dark:border-indigo-600 shadow-md ring-2 ring-indigo-500/20'
                                                 : 'bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 border-transparent hover:border-gray-200 dark:hover:border-gray-800'
                                         }`}
                                     >
-                                        <div className="flex items-center gap-4 min-w-0">
-                                            <div className="w-12 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                                        <div className="flex items-center gap-3.5 min-w-0">
+                                            <div className="w-12 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center text-xl shrink-0 overflow-hidden shadow-sm">
                                                 {p.imageData ? (
                                                     <img src={p.imageData} alt="" className="w-full h-full object-cover" />
                                                 ) : (
@@ -160,11 +170,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                                 )}
                                             </div>
                                             <div className="min-w-0">
-                                                <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                                                <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm truncate">
                                                     {p.productName}
                                                 </h3>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                    Scanned on {new Date(p.scannedAt).toLocaleDateString()}
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    Barcode: <span className="font-mono">{p.barcode || 'N/A'}</span> • {new Date(p.scannedAt).toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>
@@ -178,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                             </span>
                                             <button
                                                 onClick={(e) => handleDelete(e, p.id)}
-                                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950/50 text-gray-400 hover:text-rose-600 rounded-lg transition-colors"
+                                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950/50 text-gray-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
                                                 title="Delete"
                                             >
                                                 <Trash2 size={14} />
@@ -196,28 +206,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 sticky top-20">
                         {selectedSideProduct ? (
                             <div>
-                                <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-gray-100 dark:border-gray-700">
                                     <div>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                                            Inspected Item
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                                            Selected Inspection Box
                                         </span>
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
+                                        <h3 className="text-base font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
                                             {selectedSideProduct.productName}
                                         </h3>
                                     </div>
                                     <button
                                         onClick={() => setSelectedSideProduct(null)}
                                         className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full cursor-pointer text-gray-400 hover:text-gray-600"
+                                        title="Close side box"
                                     >
                                         <X size={18} />
                                     </button>
                                 </div>
 
                                 {/* Score Header */}
-                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl mb-4 flex items-center justify-between">
+                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl mb-3.5 flex items-center justify-between">
                                     <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
-                                        <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                                        <p className="text-[10px] uppercase font-bold text-gray-400">Score</p>
+                                        <p className="text-xl font-black text-indigo-600 dark:text-indigo-400">
                                             {selectedSideProduct.complianceScore}%
                                         </p>
                                     </div>
@@ -231,7 +242,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                 </div>
 
                                 {/* Rules 2011 Checklist with Green / Red Ticks */}
-                                <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                                <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">
                                     Rules, 2011 Checklist
                                 </h4>
 
@@ -252,7 +263,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                                         type="checkbox"
                                                         checked={isCompliant}
                                                         readOnly
-                                                        className="w-4 h-4 rounded text-indigo-600 cursor-default"
+                                                        className="w-3.5 h-3.5 rounded text-indigo-600 cursor-default"
                                                     />
                                                     <span className="font-semibold truncate text-[11px]">
                                                         {label}
@@ -269,14 +280,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                             </div>
                         ) : (
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <BookOpen size={20} className="text-indigo-600 dark:text-indigo-400" />
+                                <h2 className="text-base font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <BookOpen size={18} className="text-indigo-600 dark:text-indigo-400" />
                                     LM Rules 2011 Reference
                                 </h2>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                                    Select any scanned product on the left to see its Legal Metrology rules checklist.
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                    Click on any scanned item to open its compliance side box and verification checkmarks.
                                 </p>
-                                <div className="space-y-2.5">
+                                <div className="space-y-2">
                                     {[
                                         { title: '1. Product Identity', desc: 'Generic or common name' },
                                         { title: '2. Net Quantity', desc: 'Standard weight/vol/count' },
@@ -286,7 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                         { title: '6. Consumer Care', desc: 'Phone helpline and email' },
                                         { title: '7. Country of Origin', desc: 'Mandatory for imports' },
                                     ].map((rule, idx) => (
-                                        <div key={idx} className="p-2.5 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+                                        <div key={idx} className="p-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
                                             <h4 className="text-xs font-bold text-gray-900 dark:text-white">{rule.title}</h4>
                                             <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{rule.desc}</p>
                                         </div>

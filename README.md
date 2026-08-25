@@ -1,108 +1,138 @@
 # ⚖️ Legal Metrology Compliance Checker
 
-An automated, AI-powered compliance checking system developed under the **Legal Metrology Act, 2009** and the **Legal Metrology (Packaged Commodities) Rules, 2011**. 
+An automated, AI-powered compliance checking and verification system developed under the **Legal Metrology Act, 2009** and the **Legal Metrology (Packaged Commodities) Rules, 2011**.
 
-This system automatically detects, extracts, and validates mandatory declarations on packaged commodity labels, product listings, and packaging images to identify violations and streamline inspections for enforcement agencies in India.
-
----
-
-## ✨ Features
-
-### 🔍 Automated Packaging Scanning
-- **High-Accuracy OCR**: Scans packaging labels and extracts raw text using Google Cloud Vision API.
-- **Dynamic Input**: Supports camera capture (direct photo of packaging), file uploads, and manual text override.
-- **Barcode Lookup**: Extracts product barcodes and queries Open Food Facts / UPC registries.
-
-### ⚖️ Rules Engine (LM Packaged Commodities Rules, 2011)
-Validates all 10 mandatory declarations required on packaged goods:
-1. **Generic/Common Product Name**
-2. **Net Quantity** (in standard weight, volume, or count format)
-3. **Date of Manufacture/Packing/Import** (Month & Year)
-4. **Maximum Retail Price (MRP)** (inclusive of all taxes)
-5. **Manufacturer/Packer/Importer Details** (complete name and physical address)
-6. **Consumer Care Details** (helpline number and contact email)
-7. **Best Before/Expiry Date** (for perishables)
-8. **Country of Origin** (mandatory declaration for imported goods)
-9. **FSSAI License Number** (validated for food items)
-10. **Retail Sale Unit Price** (price representation check)
-
-### 📊 Enforcement Dashboard & Repository
-- **Digital Audit Trail**: Keeps a persistent log of all scanned products, compliance scores, and violations in MongoDB Atlas.
-- **Analytics Overview**: Visualizes total inspections, compliant vs. non-compliant percentages, and average scores.
-- **Search & Retrieve**: Easily find previous inspections by product name, date, or barcode.
-- **PDF Report Generation**: Exports clean, formatted, print-ready inspection reports and violation summaries.
+Packaged commodities sold across retail stores, supermarkets, and e-commerce platforms across India must bear mandatory declarations in prescribed formats. This application provides enforcement officials and consumers with an instant, automated mechanism to scan packaging images, extract text using Optical Character Recognition (OCR), detect barcodes, and validate all 10 mandatory declarations to identify non-compliances and violations.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack & Languages by Task
 
-| Category | Technologies |
-|----------|-------------|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, Vite |
-| **Backend** | Vercel Serverless Functions (Node.js) |
-| **Database** | MongoDB Atlas |
-| **Authentication** | JWT, bcryptjs |
-| **OCR & APIs** | Google Cloud Vision API, Open Food Facts, UPCitemdb |
+| Task / Component | Languages & Frameworks | Libraries & Tools | Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend UI & Views** | TypeScript, TSX, HTML5, CSS3 | React 18, Tailwind CSS, Lucide Icons | Responsive inspection dashboard, grid form editor, live rules checklists, and dark mode interface |
+| **State & Local Cache** | TypeScript | React Context API, Web LocalStorage API | Optimistic UI updates, instant (0ms) dashboard loading, and background database syncing |
+| **Backend & REST APIs** | JavaScript (ES Modules), Node.js | Vercel Serverless Functions | Serverless endpoints for inspection persistence (`/api/products`), single product queries (`/api/products/:id`), and authentication |
+| **Database & Persistence** | NoSQL, MongoDB Query Language | MongoDB Atlas, `mongodb` Node SDK | Cloud-hosted NoSQL document database storing inspection logs, compliance scores, and evidence photos |
+| **Authentication & Security** | JavaScript, Node.js | JWT (`jsonwebtoken`, `jose`), `bcryptjs` | Role-based user authentication, password salting/hashing, and PKCS8 service account key parsing |
+| **Vision OCR & Barcode** | TypeScript, JavaScript, REST | Google Cloud Vision API, `BarcodeDetector` API, HTML5 Canvas | High-precision label OCR extraction, native browser barcode scanning, and image preprocessing |
+| **Product Registry Lookup** | JavaScript, HTTP / REST | Open Food Facts API, UPCitemdb API | Barcode-to-product mapping to verify product names and brand identities |
+| **Report Generation & PDF** | CSS3 (`@media print`), JavaScript | Window Print Engine, CSS Paged Media | Official digital compliance inspection certificates with print-to-PDF export |
+| **Build & Dev Tooling** | TypeScript, Node.js | Vite 5, PostCSS, Autoprefixer | Fast HMR dev server and optimized production bundling |
+
+---
+
+## ✨ Key Features
+
+### 1. 🔍 Multi-Modal Packaging Input
+- **📷 Camera Scan**: Real-time camera viewfinder with alignment guide and OCR extraction.
+- **📤 Image Upload**: Drag-and-drop or file upload for high-resolution packaging photos and evidence.
+- **✍️ Specifics Grid Form**: Interactive, emoji/icon-rich grid to manually fill or edit declaration specifics (Net Weight, MRP, Mfg Date, Expiry, Manufacturer, FSSAI, Consumer Care, Origin, USP).
+
+### 2. ⚖️ Rule-Based Compliance Engine (Rules, 2011)
+Validates all **10 mandatory declarations** required under the Legal Metrology (Packaged Commodities) Rules, 2011:
+1. 🏷️ **Generic / Common Product Name**
+2. ⚖️ **Net Quantity** (with standard unit validation: g, kg, ml, L, pcs)
+3. 💰 **Maximum Retail Price (MRP)** (inclusive of all taxes check)
+4. 📅 **Date of Manufacture / Packing / Import** (Month and Year)
+5. ⌛ **Best Before / Expiry Date** (for perishables)
+6. 🏭 **Manufacturer / Packer / Importer Name & Full Address**
+7. 📞 **Consumer Care Details** (Helpline telephone and contact email)
+8. 🛡️ **FSSAI 14-Digit License Number** (food safety validation)
+9. 🌐 **Country of Origin** (mandatory for imported commodities)
+10. 💵 **Retail Sale Unit Price (USP)** (per-gram/ml price transparency)
+
+### 3. 📊 Enforcement Dashboard & Side-Box Checklist
+- **Real-Time Side Box**: Selecting any scanned product displays a dedicated side box featuring the **Rules 2011 Checklist** with **Green Ticks (✔️ Pass)** for compliant fields and **Red Crosses (❌ Fail)** for violations.
+- **Aggregate Analytics**: Total inspections, fully compliant count, violation summary, and average compliance score.
+- **Persistent Products Registry**: Filterable and searchable product database with status filters (`Compliant`, `Partially Compliant`, `Non-Compliant`).
+- **Official PDF Reports**: Instant one-click print/export for digital inspection certificates with inspector field notes.
+
+---
+
+## 📁 Project Architecture
+
+```
+├── api/                       # Backend Serverless Functions (Node.js)
+│   ├── auth/                  # Register, Login & Google OAuth
+│   │   ├── register.js
+│   │   ├── login.js
+│   │   └── google.js
+│   ├── products/              # Products & Inspections CRUD API
+│   │   ├── index.js           # GET all scans, POST new scan
+│   │   └── [id].js            # GET, PUT (notes), DELETE scan record
+│   ├── lib/                   # Shared DB & Security Helpers
+│   │   ├── mongodb.js         # MongoDB Atlas client connection pooling
+│   │   └── auth.js            # JWT verification middleware
+│   └── health.js              # Server health check endpoint
+├── src/                       # Frontend Application (React + TypeScript)
+│   ├── components/            # Reusable UI Components
+│   │   ├── AddProductModal.tsx # Interactive + Add / Scan modal popup with specifics grid
+│   │   ├── CameraModal.tsx    # Live camera scanner with OCR alignment guide
+│   │   ├── Layout.tsx         # App shell, navigation header with Scanner icon
+│   │   └── SettingsPanel.tsx  # Theme and system preferences
+│   ├── context/               # Global State Management
+│   │   ├── AuthContext.tsx    # Authentication state & tokens
+│   │   ├── ProductContext.tsx # Instant-load product cache & API sync
+│   │   └── ThemeContext.tsx   # Light/Dark mode state
+│   ├── pages/                 # Main Application Views
+│   │   ├── Dashboard.tsx      # Overview stats, recent items, side-box checklist
+│   │   ├── ScanProduct.tsx    # Dedicated scan & specifics grid workspace
+│   │   ├── Repository.tsx     # Products & inspections database registry
+│   │   ├── ReportDetail.tsx   # Official inspection certificate & PDF export
+│   │   └── LoginPage.tsx      # Sign in & Registration
+│   ├── services/              # Business Logic & External Integrations
+│   │   ├── complianceService.ts # Legal Metrology Rules, 2011 validation engine
+│   │   ├── visionService.ts   # Google Cloud Vision OCR & Barcode detection
+│   │   └── api.ts             # Type-safe frontend API client
+│   ├── types.ts               # Core TypeScript interfaces & declarations
+│   └── main.tsx               # App entry point
+├── vite.config.ts             # Vite dev server with integrated API middleware
+└── README.md                  # Technical documentation
+```
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-- MongoDB Atlas cluster
-- Google Cloud Vision API Key / Service Account credentials (optional; fallback to browser scanner and manual text mode works out of the box)
+### 1. Clone the repository
+```bash
+git clone https://github.com/Srujan-AI-ML/Smart-Bite.git
+cd Smart-Bite
+```
 
-### Installation & Run
+### 2. Install dependencies
+```bash
+npm install
+```
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### 3. Configure environment variables
+Create a `.env` file in the root directory:
+```env
+# MongoDB Atlas Database URI (Required)
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/smartbite
 
-2. **Set up your environment variables**
-   Create a `.env` file in the root directory (or edit the template):
-   ```env
-   # MongoDB Connection (Required)
-   MONGODB_URI=mongodb+srv://your_user:your_password@cluster.mongodb.net/smartbite
-   
-   # JWT Secret for Auth (Required)
-   JWT_SECRET=your-jwt-secret-key
-   
-   # Google Cloud Vision (Optional - for OCR text extraction)
-   VITE_GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-   VITE_GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
-   ```
+# JWT Secret Key (Required)
+JWT_SECRET=your-secure-jwt-secret
 
-3. **Run the development server**
-   ```bash
-   npm run dev
-   ```
+# Google Cloud Vision Credentials (Optional - for advanced OCR)
+VITE_GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+VITE_GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----"
+```
 
-4. **Open in browser**
-   Visit `http://localhost:5173` to test the application.
+### 4. Run the development server
+```bash
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
 
 ---
 
-## 📁 Project Structure
+## 👤 Author Information
 
-```
-├── api/                  # Vercel Serverless Functions (Backend)
-│   ├── auth/             # Login, Registration, and Google Auth
-│   ├── products/         # Scan saving, retrieval, and deletion API
-│   ├── lib/              # JWT verification and MongoDB connections
-│   └── health.js         # API server health check
-├── src/                  # Frontend (React App)
-│   ├── components/       # Layout, settings panel, camera capture modals
-│   ├── context/          # Auth context and Products/Scans state context
-│   ├── pages/            # Dashboard, Scan Product, Repository, and detailed Report pages
-│   ├── services/         # API fetching, regex compliance checking, and OCR service
-│   ├── types.ts          # TypeScript type definitions for compliance records
-│   └── main.tsx          # React application entry point
-├── vite.config.ts        # Vite configuration & local development API proxy server
-└── .env                  # Configuration keys (locally stored only)
-```
+- **Author**: Srujan
+- **Email**: `[To be updated]`
+- **Repository**: [https://github.com/Srujan-AI-ML/Smart-Bite](https://github.com/Srujan-AI-ML/Smart-Bite)
 
 ---
 

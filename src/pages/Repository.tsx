@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus } from 'lucide-react';
+import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus, Package, ScanLine } from 'lucide-react';
 import type { ScannedProduct } from '../types';
+import type { PageType } from '../App';
 
 interface RepositoryProps {
-    onNavigate: (page: 'home' | 'scan' | 'repository') => void;
+    onNavigate: (page: PageType) => void;
     onSelectProduct: (product: ScannedProduct) => void;
+    onOpenAddModal?: () => void;
 }
 
-export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProduct }) => {
+export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProduct, onOpenAddModal }) => {
     const { products, removeScanRecord } = useProduct();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -26,11 +28,11 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (window.confirm('Are you sure you want to permanently delete this inspection record?')) {
+        if (window.confirm('Are you sure you want to permanently delete this product record?')) {
             try {
                 await removeScanRecord(id);
             } catch (err: any) {
-                alert('Failed to delete scan: ' + err.message);
+                alert('Failed to delete: ' + err.message);
             }
         }
     };
@@ -48,6 +50,7 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
             {/* Top Navigation & Return Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <button
+                    type="button"
                     onClick={() => onNavigate('home')}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-white rounded-xl text-sm font-bold shadow-sm border border-gray-200 dark:border-gray-700 transition-all cursor-pointer"
                 >
@@ -55,22 +58,29 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                     Return to Dashboard
                 </button>
 
-                <button
-                    onClick={() => onNavigate('scan')}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-                >
-                    <Plus size={16} />
-                    + Add / Scan Product
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (onOpenAddModal) onOpenAddModal();
+                            else onNavigate('scan');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                    >
+                        <Plus size={15} />
+                        + Add / Scan Product
+                    </button>
+                </div>
             </div>
 
             {/* Header */}
             <div className="mb-8">
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    Inspection Repository
+                    <Package className="text-indigo-600 dark:text-indigo-400" />
+                    Products & Inspections Registry
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">
-                    Search, view, and retrieve previous inspections and digital compliance reports.
+                    Search, view, and retrieve previous inspections, packaging evidence, and digital compliance reports.
                 </p>
             </div>
 
@@ -112,10 +122,10 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
             {/* List Results */}
             {filteredProducts.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center border border-gray-100 dark:border-gray-700/50 shadow-sm">
-                    <div className="text-5xl mb-4">🔍</div>
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">No inspections matched filters</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Try modifying search keywords or check different compliance filter categories.
+                    <div className="text-5xl mb-4">📦</div>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">No products found</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-sm mx-auto">
+                        Click "+ Add / Scan Product" above to scan packaging or add declarations.
                     </p>
                 </div>
             ) : (
@@ -124,7 +134,7 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/50 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    <th className="px-6 py-4">Product Info</th>
+                                    <th className="px-6 py-4">Product Details</th>
                                     <th className="px-6 py-4">Barcode</th>
                                     <th className="px-6 py-4">Inspection Date</th>
                                     <th className="px-6 py-4">Score</th>
@@ -140,10 +150,10 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                                         className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30 cursor-pointer transition-colors"
                                     >
                                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center text-lg overflow-hidden shrink-0">
+                                            <div className="w-11 h-11 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-center text-lg overflow-hidden shrink-0">
                                                 {p.imageData ? <img src={p.imageData} alt="" className="w-full h-full object-cover" /> : '📦'}
                                             </div>
-                                            <span className="truncate max-w-[200px]">{p.productName}</span>
+                                            <span className="truncate max-w-[220px]">{p.productName}</span>
                                         </td>
                                         <td className="px-6 py-4 text-gray-500 dark:text-gray-400 font-mono text-xs">
                                             {p.barcode || 'N/A'}

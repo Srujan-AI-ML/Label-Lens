@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Scale, Settings, Home, Activity, Archive, LogOut, User } from 'lucide-react';
+import { Scale, Settings, Home, ScanLine, Package, LogOut, User, Plus, Barcode } from 'lucide-react';
 import { SettingsPanel } from './SettingsPanel';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -9,17 +9,18 @@ interface LayoutProps {
     children: React.ReactNode;
     currentPage: PageType;
     onNavigate: (page: PageType) => void;
+    onOpenAddModal?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onOpenAddModal }) => {
     const [showSettings, setShowSettings] = useState(false);
     const { isDarkMode } = useTheme();
     const { user, logout } = useAuth();
 
     const navItems = [
         { id: 'home' as PageType, label: 'Dashboard', icon: Home },
-        { id: 'scan' as PageType, label: 'Scan label', icon: Activity },
-        { id: 'repository' as PageType, label: 'Repository', icon: Archive },
+        { id: 'scan' as PageType, label: 'Scan & Add', icon: ScanLine },
+        { id: 'products' as PageType, label: 'Products', icon: Package },
     ];
 
     return (
@@ -56,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                     key={item.id}
                                     onClick={() => onNavigate(item.id)}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${isActive
-                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-450 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                                         }`}
                                 >
@@ -69,20 +70,27 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
 
                     {/* Right Actions */}
                     <div className="flex items-center gap-2">
-                        {/* + Add / Scan Product Button */}
+                        {/* + Add New Product Button */}
                         <button
-                            onClick={() => onNavigate('scan')}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                            onClick={() => {
+                                if (onOpenAddModal) {
+                                    onOpenAddModal();
+                                } else {
+                                    onNavigate('scan');
+                                }
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
                         >
-                            <span className="text-base leading-none font-normal">+</span>
-                            <span className="hidden sm:inline">Add / Scan Product</span>
-                            <span className="sm:hidden">Scan</span>
+                            <Plus size={15} />
+                            <span className="hidden sm:inline">+ Add Product</span>
+                            <span className="sm:hidden">Add</span>
                         </button>
 
                         {/* Settings Button */}
                         <button
                             onClick={() => setShowSettings(true)}
-                            className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors cursor-pointer text-gray-650 dark:text-gray-300"
+                            className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors cursor-pointer text-gray-600 dark:text-gray-300"
+                            title="Preferences"
                         >
                             <Settings size={20} />
                         </button>
@@ -101,7 +109,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                     className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-full transition-colors group cursor-pointer"
                                     title="Logout"
                                 >
-                                    <LogOut size={18} className="text-gray-500 group-hover:text-rose-600 dark:text-gray-400 dark:group-hover:text-rose-450" />
+                                    <LogOut size={18} className="text-gray-500 group-hover:text-rose-600 dark:text-gray-400 dark:group-hover:text-rose-400" />
                                 </button>
                             </div>
                         )}
@@ -120,12 +128,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                 key={item.id}
                                 onClick={() => onNavigate(item.id)}
                                 className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all cursor-pointer ${isActive
-                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                                     : 'text-gray-400 dark:text-gray-500'
                                     }`}
                             >
                                 <Icon size={20} />
-                                <span className="text-[10px] font-bold">{item.label}</span>
+                                <span className="text-[10px] font-medium">{item.label}</span>
                             </button>
                         );
                     })}
