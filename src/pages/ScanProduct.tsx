@@ -4,9 +4,8 @@ import { CameraModal } from '../components/CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
 import { analyseCompliance, buildScanResult } from '../services/complianceService';
 import { 
-    Camera, Upload, ArrowLeft, ShieldCheck, ShieldAlert, Sparkles, 
-    AlertCircle, FileText, CheckCircle2, XCircle, Tag, Scale, DollarSign, 
-    Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Plus, Save, RotateCcw,
+    Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
+    Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Save, RotateCcw,
     ScanLine, X
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
@@ -591,7 +590,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                                 className="w-4 h-4 rounded text-indigo-600 focus:ring-0 cursor-default"
                                             />
                                             <span className="font-semibold text-gray-800 dark:text-gray-200 truncate text-[11px]">
-                                                {title}
+                                                {emoji} {title}
                                             </span>
                                         </div>
 
@@ -608,7 +607,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                         </div>
                                     </div>
                                 );
-                            })}
+                             })}
                         </div>
                     </div>
                 </div>
@@ -616,15 +615,16 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             </div>
 
             {/* Camera Overlay Modal */}
-            <CameraModal
-                isOpen={showCamera}
-                onClose={() => setShowCamera(false)}
-                onEnterManual={() => {
-                    setShowCamera(false);
-                    setMode('manual');
-                }}
-                onCapture={handleCameraCapture}
-            />
+            {showCamera && (
+                <CameraModal
+                    onClose={() => setShowCamera(false)}
+                    onEnterManual={() => {
+                        setShowCamera(false);
+                        setMode('manual');
+                    }}
+                    onCapture={handleCameraCapture}
+                />
+            )}
         </div>
     );
 };

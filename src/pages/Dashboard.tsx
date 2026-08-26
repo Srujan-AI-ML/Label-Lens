@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { ShieldCheck, ShieldAlert, FileText, ArrowRight, BookOpen, Scale, Award, X, ExternalLink, Trash2, Plus, ScanLine } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileText, ArrowRight, BookOpen, Scale, Award, X, ExternalLink, Trash2, Plus } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 import type { PageType } from '../App';
 

@@ -209,6 +209,10 @@ export function analyseCompliance(
     retailSalePrice: extractRetailSalePrice(text),
   };
 
+  if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim()) {
+    declarations.genericName = makeDeclaration(true, productName.trim(), 'high');
+  }
+
   const violations: Violation[] = [];
 
   // Mandatory checks (critical = must have)

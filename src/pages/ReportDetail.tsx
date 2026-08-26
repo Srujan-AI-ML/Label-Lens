@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Printer, Edit2, Upload } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Printer, Edit2 } from 'lucide-react';
 
 interface ReportDetailProps {
     product: ScannedProduct;

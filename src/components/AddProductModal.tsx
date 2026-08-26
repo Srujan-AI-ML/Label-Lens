@@ -4,9 +4,7 @@ import { CameraModal } from './CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
 import { analyseCompliance, buildScanResult } from '../services/complianceService';
 import {
-    X, Camera, Upload, CheckCircle2, XCircle, AlertCircle, Sparkles,
-    Tag, Scale, DollarSign, Calendar, Clock, Factory, Phone, Shield,
-    Globe, Layers, Save, RotateCcw, FileText, ArrowRight, ScanLine, Image as ImageIcon
+    X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 
@@ -615,15 +613,16 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             </div>
 
             {/* Camera Overlay Modal */}
-            <CameraModal
-                isOpen={showCamera}
-                onClose={() => setShowCamera(false)}
-                onEnterManual={() => {
-                    setShowCamera(false);
-                    setActiveTab('manual');
-                }}
-                onCapture={handleCameraCapture}
-            />
+            {showCamera && (
+                <CameraModal
+                    onClose={() => setShowCamera(false)}
+                    onEnterManual={() => {
+                        setShowCamera(false);
+                        setActiveTab('manual');
+                    }}
+                    onCapture={handleCameraCapture}
+                />
+            )}
         </div>
     );
 };

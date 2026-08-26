@@ -1,11 +1,10 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { X, RefreshCw, AlertCircle, ChevronDown, Video, Zap, PenLine, Camera, ScanLine } from 'lucide-react';
+import { X, RefreshCw, AlertCircle, ChevronDown, Video, ScanLine } from 'lucide-react';
 
 interface CameraModalProps {
     onCapture: (imageSrc: string) => void;
     onClose: () => void;
     onEnterManual?: () => void;
-    type?: 'product' | 'expiry' | 'label';
 }
 
 interface CameraDevice {
@@ -13,7 +12,7 @@ interface CameraDevice {
     label: string;
 }
 
-export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, onEnterManual, type = 'label' }) => {
+export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, onEnterManual }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const activeStreamRef = useRef<MediaStream | null>(null);
@@ -24,7 +23,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
     const [_selectedCameraId, setSelectedCameraId] = useState<string>('');
     const [showCameraSelect, setShowCameraSelect] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
-    const [flashOn, setFlashOn] = useState(false);
 
     const killAllStreams = useCallback(() => {
         if (activeStreamRef.current) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus, Package, ScanLine } from 'lucide-react';
+import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus, Package } from 'lucide-react';
 import type { ScannedProduct } from '../types';
 import type { PageType } from '../App';
 

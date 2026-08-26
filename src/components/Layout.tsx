@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Scale, Settings, Home, ScanLine, Package, LogOut, User, Plus, Barcode } from 'lucide-react';
+import { Scale, Settings, Home, ScanLine, Package, LogOut, User, Plus } from 'lucide-react';
 import { SettingsPanel } from './SettingsPanel';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';

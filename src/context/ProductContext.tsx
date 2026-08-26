@@ -69,6 +69,7 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
 
     const refetchProducts = useCallback(async () => {
         if (!isAuthenticated) return;
+        setIsLoading(true);
         try {
             const data = await productsAPI.getAll();
             if (Array.isArray(data)) {
@@ -76,6 +77,8 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error('Background fetch products warning:', error);
+        } finally {
+            setIsLoading(false);
         }
     }, [isAuthenticated]);
 
