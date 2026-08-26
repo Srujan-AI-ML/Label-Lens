@@ -227,6 +227,7 @@ export function analyseCompliance(
     { key: 'manufactureDate', label: 'Date of Manufacture / Packing', msg: 'Month and year of manufacture/packing/import is missing.' },
     { key: 'consumerCare', label: 'Consumer Care Details', msg: 'Consumer care contact (phone/email) is missing.' },
     { key: 'genericName', label: 'Generic / Common Name', msg: 'Generic or common name of the product is missing.' },
+    { key: 'bestBefore', label: 'Best Before / Expiry Date', msg: 'Best before or expiry date is missing.' },
   ];
 
   // Major checks
@@ -235,7 +236,6 @@ export function analyseCompliance(
     label: string;
     msg: string;
   }> = [
-    { key: 'bestBefore', label: 'Best Before / Expiry Date', msg: 'Best before or expiry date is missing.' },
     { key: 'fssaiLicense', label: 'FSSAI License Number', msg: 'FSSAI 14-digit license number is missing (required for food products).' },
     { key: 'retailSalePrice', label: 'Retail Sale Price Declaration', msg: 'Retail sale price per unit or "MRP inclusive of all taxes" not stated.' },
   ];
@@ -265,10 +265,10 @@ export function analyseCompliance(
     }
   });
 
-  // Score: critical=15pts each (90 total), major=5pts each (15 total), minor=5pts (5 total) → 100
-  const criticalScore = criticalChecks.filter(c => declarations[c.key].present).length * 15;
-  const majorScore = majorChecks.filter(c => declarations[c.key].present).length * 5;
-  const minorScore = minorChecks.filter(c => declarations[c.key].present).length * 5;
+  // Score: critical=12pts each (84 total), major=6pts each (12 total), minor=4pts (4 total) → 100
+  const criticalScore = criticalChecks.filter(c => declarations[c.key].present).length * 12;
+  const majorScore = majorChecks.filter(c => declarations[c.key].present).length * 6;
+  const minorScore = minorChecks.filter(c => declarations[c.key].present).length * 4;
   const complianceScore = Math.min(100, criticalScore + majorScore + minorScore);
 
   // Status
@@ -343,7 +343,9 @@ export function validateProductSpecifics(data: {
     }
   }
 
-  if (data.expiryDate.trim()) {
+  if (!data.expiryDate.trim()) {
+    return { isValid: false, errorMsg: 'Expiry / Best Before Date is required.' };
+  } else {
     const exp = new Date(data.expiryDate);
     const mfg = new Date(data.mfgDate);
     if (isNaN(exp.getTime())) {
