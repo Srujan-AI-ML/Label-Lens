@@ -738,7 +738,6 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     onClose={() => setShowCamera(false)}
                     onEnterManual={() => {
                         setShowCamera(false);
-                        setMode('manual');
                     }}
                     onCapture={handleCameraCapture}
                 />
