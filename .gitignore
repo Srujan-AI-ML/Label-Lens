@@ -35,3 +35,9 @@ mongodb-*.env
 *.njsproj
 *.sln
 *.sw?
+
+# Scratch / dev-only files (not part of the project)
+SUBMISSION_5_GOLDMINE_SACKS.html
+.git.zip
+io.py
+PROGRESS_REPORT.md
