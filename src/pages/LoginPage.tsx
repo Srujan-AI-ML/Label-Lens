@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Lock, Eye, EyeOff, LogIn, UserPlus, Loader, ChefHat, Sparkles } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, LogIn, UserPlus, Loader, Eye as BrandEye, Sparkles } from 'lucide-react';
 
 // Google Client ID from environment variable
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -129,23 +129,22 @@ export const LoginPage: React.FC = () => {
             setIsLoading(false);
         }
     };
-
     return (
-        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
             {/* Background decoration */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-200 dark:bg-emerald-900/20 rounded-full blur-3xl opacity-50" />
-                <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-200 dark:bg-teal-900/20 rounded-full blur-3xl opacity-50" />
+                <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 dark:bg-blue-900/20 rounded-full blur-3xl opacity-50" />
+                <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-sky-200 dark:bg-sky-900/20 rounded-full blur-3xl opacity-50" />
             </div>
 
             <div className="relative w-full max-w-md">
                 {/* Logo Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-3xl shadow-lg shadow-emerald-500/25 mb-4">
-                        <ChefHat size={40} className="text-white" />
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl shadow-lg shadow-blue-500/25 mb-4">
+                        <BrandEye size={40} className="text-white" />
                     </div>
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white">
-                        Smart<span className="text-emerald-500">Bite</span>
+                    <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                        Label <span className="text-blue-600">Lens</span>
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2">
                         {isLogin ? 'Welcome back!' : 'Create your account'}
@@ -185,7 +184,7 @@ export const LoginPage: React.FC = () => {
                             />
                             {googleLoading && (
                                 <div className="flex justify-center mt-3">
-                                    <Loader size={20} className="animate-spin text-emerald-500" />
+                                    <Loader size={20} className="animate-spin text-blue-500" />
                                     <span className="ml-2 text-sm text-gray-500">Signing in with Google...</span>
                                 </div>
                             )}
@@ -230,7 +229,7 @@ export const LoginPage: React.FC = () => {
                                     type="text"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors"
+                                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
                                     placeholder="Enter your username"
                                     required
                                     minLength={3}
@@ -251,7 +250,7 @@ export const LoginPage: React.FC = () => {
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors"
+                                    className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
                                     placeholder={isLogin ? 'Enter your password' : 'Create a strong password'}
                                     required
                                     minLength={isLogin ? 1 : 8}
@@ -275,10 +274,10 @@ export const LoginPage: React.FC = () => {
                                         { check: pwChecks.digit, label: 'At least 1 digit (0–9)' },
                                     ] as { check: boolean; label: string }[]).map(({ check, label }) => (
                                         <div key={label} className={`flex items-center gap-2 text-xs font-medium transition-colors ${
-                                            check ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'
+                                            check ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
                                         }`}>
                                             <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0 ${
-                                                check ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                                                check ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
                                             }`}>{check ? '✓' : '·'}</span>
                                             {label}
                                         </div>
@@ -291,7 +290,7 @@ export const LoginPage: React.FC = () => {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
                                 <Loader size={20} className="animate-spin" />

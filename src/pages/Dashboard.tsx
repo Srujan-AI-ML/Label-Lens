@@ -64,17 +64,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                        <Scale className="text-indigo-600 dark:text-indigo-400" />
-                        Legal Metrology Compliance Checker
+                        <Scale className="text-blue-600 dark:text-blue-400" />
+                        Label Lens Compliance Checker
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-                        Assess, validate and verify mandatory declarations under Legal Metrology (Packaged Commodities) Rules, 2011.
+                        Assess, validate and verify mandatory packaging declarations under Label Lens system rules.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleAddClick}
-                        className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/35 transition-all text-xs sm:text-sm cursor-pointer hover:scale-105 active:scale-95"
+                        className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-600/25 hover:shadow-blue-500/35 transition-all text-xs sm:text-sm cursor-pointer hover:scale-105 active:scale-95"
                     >
                         <Plus size={18} />
                         Add New Product / Scan
@@ -85,7 +85,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
-                    <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-2xl">
                         <FileText size={24} />
                     </div>
                     <div>
@@ -115,7 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
-                    <div className="p-4 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 rounded-2xl">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-2xl">
                         <Award size={24} />
                     </div>
                     <div>
@@ -134,7 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Recent Inspections</h2>
                             <button
                                 onClick={() => onNavigate('products')}
-                                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 cursor-pointer"
+                                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
                             >
                                 View All Products
                                 <ArrowRight size={14} />
@@ -157,7 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                         onClick={() => setSelectedSideProduct(p)}
                                         className={`flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border ${
                                             selectedSideProduct?.id === p.id
-                                                ? 'bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-400 dark:border-indigo-600 shadow-md ring-2 ring-indigo-500/20'
+                                                ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 dark:border-blue-600 shadow-md ring-2 ring-blue-500/20'
                                                 : 'bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 border-transparent hover:border-gray-200 dark:hover:border-gray-800'
                                         }`}
                                     >
@@ -208,7 +208,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                             <div>
                                 <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-gray-100 dark:border-gray-700">
                                     <div>
-                                        <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                                             Selected Inspection Box
                                         </span>
                                         <h3 className="text-base font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
@@ -225,16 +225,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                 </div>
 
                                 {/* Score Header */}
-                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl mb-3.5 flex items-center justify-between">
+                                <div className="p-3 bg-blue-50/50 dark:bg-blue-950/30 rounded-2xl mb-3.5 flex items-center justify-between">
                                     <div>
                                         <p className="text-[10px] uppercase font-bold text-gray-400">Score</p>
-                                        <p className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+                                        <p className="text-xl font-black text-blue-600 dark:text-blue-400">
                                             {selectedSideProduct.complianceScore}%
                                         </p>
                                     </div>
                                     <button
                                         onClick={() => onSelectProduct(selectedSideProduct)}
-                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm cursor-pointer"
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm cursor-pointer"
                                     >
                                         Full Report
                                         <ExternalLink size={12} />
@@ -263,7 +263,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                                                         type="checkbox"
                                                         checked={isCompliant}
                                                         readOnly
-                                                        className="w-3.5 h-3.5 rounded text-indigo-600 cursor-default"
+                                                        className="w-3.5 h-3.5 rounded text-blue-600 cursor-default"
                                                     />
                                                     <span className="font-semibold truncate text-[11px]">
                                                         {label}
@@ -281,8 +281,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         ) : (
                             <div>
                                 <h2 className="text-base font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                    <BookOpen size={18} className="text-indigo-600 dark:text-indigo-400" />
-                                    LM Rules 2011 Reference
+                                    <BookOpen size={18} className="text-blue-600 dark:text-blue-400" />
+                                    Label Lens Rules Reference
                                 </h2>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                                     Click on any scanned item to open its compliance side box and verification checkmarks.

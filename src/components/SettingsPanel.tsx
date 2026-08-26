@@ -74,22 +74,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
 
                         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl space-y-3">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl">
+                                <div className="p-2 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl">
                                     <Scale size={18} className="text-white" />
                                 </div>
                                 <div>
-                                    <p className="font-bold text-gray-800 dark:text-gray-200">Legal Metrology</p>
+                                    <p className="font-bold text-gray-800 dark:text-gray-200">Label Lens</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">Compliance Checker & Inspection Log</p>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2 pt-2">
                                 <div className="flex items-center gap-2 p-2 bg-white dark:bg-gray-750 rounded-xl">
-                                    <Shield size={14} className="text-indigo-500" />
+                                    <Shield size={14} className="text-blue-500" />
                                     <span className="text-xs text-gray-600 dark:text-gray-350">Secure Logs</span>
                                 </div>
                                 <div className="flex items-center gap-2 p-2 bg-white dark:bg-gray-750 rounded-xl">
-                                    <Heart size={14} className="text-violet-500" />
+                                    <Heart size={14} className="text-blue-500" />
                                     <span className="text-xs text-gray-600 dark:text-gray-350">Fair Trade</span>
                                 </div>
                             </div>

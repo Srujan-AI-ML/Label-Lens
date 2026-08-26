@@ -255,14 +255,14 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             <div className="relative w-full max-w-5xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
                 
                 {/* Modal Header */}
-                <div className="sticky top-0 z-20 px-6 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white flex items-center justify-between shadow-md">
+                <div className="sticky top-0 z-20 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-800 text-white flex items-center justify-between shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
                             <ScanLine size={22} className="text-white" />
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-white leading-tight">+ Add & Scan Product Declarations</h2>
-                            <p className="text-xs text-white/80">Legal Metrology (Packaged Commodities) Rules, 2011</p>
+                            <p className="text-xs text-white/80">Label Lens Compliance Verifier</p>
                         </div>
                     </div>
 
@@ -288,7 +288,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 onClick={() => setActiveTab('manual')}
                                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-initial ${
                                     activeTab === 'manual'
-                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
@@ -299,7 +299,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 onClick={() => setActiveTab('upload')}
                                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-initial ${
                                     activeTab === 'upload'
-                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
@@ -313,7 +313,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 }}
                                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-initial ${
                                     activeTab === 'camera'
-                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
@@ -336,8 +336,8 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
 
                     {/* Status Alert Banner */}
                     {statusMsg && (
-                        <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl text-xs font-medium text-indigo-800 dark:text-indigo-300 flex items-center gap-2">
-                            <Sparkles size={16} className="text-indigo-600 shrink-0" />
+                        <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-2xl text-xs font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                            <Sparkles size={16} className="text-blue-600 shrink-0" />
                             <span>{statusMsg}</span>
                         </div>
                     )}
@@ -346,7 +346,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                     {activeTab === 'upload' && (
                         <div
                             onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-indigo-300 dark:border-indigo-700/60 hover:border-indigo-500 rounded-3xl p-8 text-center bg-indigo-50/30 dark:bg-indigo-950/20 hover:bg-indigo-50/60 transition-all cursor-pointer"
+                            className="border-2 border-dashed border-blue-300 dark:border-blue-700/60 hover:border-blue-500 rounded-3xl p-8 text-center bg-blue-50/30 dark:bg-blue-950/20 hover:bg-blue-50/60 transition-all cursor-pointer"
                         >
                             <input
                                 type="file"
@@ -355,7 +355,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 onChange={handleFileChange}
                                 className="hidden"
                             />
-                            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                                 <Upload size={26} />
                             </div>
                             <h3 className="font-bold text-sm text-gray-900 dark:text-white">Click or Drag & Drop Packaging Image</h3>
@@ -588,7 +588,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         </h4>
                                         <p className="text-[10px] text-gray-500">Live Verification Status</p>
                                     </div>
-                                    <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                                    <span className="text-lg font-black text-blue-600 dark:text-blue-400">
                                         {liveAnalysis.complianceScore}%
                                     </span>
                                 </div>
@@ -654,7 +654,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={isProcessing}
-                            className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                            className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer"
                         >
                             <Sparkles size={15} />
                             Save & View Certificate

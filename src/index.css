@@ -11,13 +11,13 @@
 
   /* Light mode background */
   body {
-    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdfa 100%);
+    background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 50%, #e0f2fe 100%);
   }
 
   /* Dark mode background */
   .dark body,
   body:has(.dark) {
-    background: linear-gradient(135deg, #111827 0%, #0f172a 50%, #111827 100%);
+    background: linear-gradient(135deg, #0f172a 0%, #020617 50%, #0f172a 100%);
   }
 
   html.dark {
@@ -34,12 +34,12 @@
 
   /* Input Fields with Focus Glow */
   .input-field {
-    @apply block w-full rounded-xl border border-gray-200/80 dark:border-gray-600 text-sm py-3.5 px-4 bg-white/80 dark:bg-gray-700/80 dark:text-gray-100 backdrop-blur-sm transition-all duration-300 outline-none focus:border-emerald-400 dark:focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-400;
+    @apply block w-full rounded-xl border border-gray-200/80 dark:border-gray-600 text-sm py-3.5 px-4 bg-white/80 dark:bg-gray-700/80 dark:text-gray-100 backdrop-blur-sm transition-all duration-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:focus:ring-blue-500/20 focus:bg-white dark:focus:bg-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-400;
   }
 
   /* Primary Button with Gradient */
   .btn-primary {
-    @apply w-full flex justify-center items-center py-4 px-6 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] transition-all duration-200;
+    @apply w-full flex justify-center items-center py-4 px-6 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:from-blue-700 hover:to-blue-900 active:scale-[0.98] transition-all duration-200;
   }
 
   /* Premium Card Styles */
@@ -48,7 +48,7 @@
   }
 
   .card-fresh {
-    @apply bg-gradient-to-br from-white to-emerald-50/50 dark:from-gray-800 dark:to-emerald-900/20 border-emerald-100 dark:border-emerald-800/50;
+    @apply bg-gradient-to-br from-white to-blue-50/50 dark:from-gray-800 dark:to-blue-900/20 border-blue-100 dark:border-blue-800/50;
   }
 
   .card-warning {
@@ -65,7 +65,7 @@
   }
 
   .badge-fresh {
-    @apply bg-gradient-to-r from-emerald-500 to-teal-500 text-white;
+    @apply bg-gradient-to-r from-blue-600 to-blue-800 text-white;
   }
 
   .badge-warning {
@@ -83,7 +83,7 @@
 
   /* Floating Action Button */
   .fab {
-    @apply fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 md:hidden z-40;
+    @apply fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-xl shadow-blue-500/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 md:hidden z-40;
   }
 }
 
@@ -91,7 +91,7 @@
 
   /* Animated gradient text */
   .text-gradient {
-    @apply bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-blue-600 via-sky-600 to-blue-855 bg-clip-text text-transparent;
   }
 
   /* Subtle pulse animation for badges */

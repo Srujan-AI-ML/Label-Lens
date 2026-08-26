@@ -68,7 +68,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
 
                 <button
                     onClick={handlePrint}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
                 >
                     <Printer size={16} />
                     Print / Export PDF Report
@@ -81,7 +81,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(product.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
                     <div>
                         <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
-                            Official Legal Metrology Inspection Certificate
+                            Official Label Lens Inspection Certificate
                         </span>
                         <h1 className="text-2xl md:text-3xl font-black mt-2">{product.productName}</h1>
                         <p className="text-xs text-white/80 mt-1">
@@ -114,8 +114,8 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
                         <div>
                             <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Legal Act</span>
-                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">
-                                Legal Metrology (Packaged Commodities) Rules, 2011
+                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1 block">
+                                Label Lens Verification Guidelines
                             </span>
                         </div>
                     </div>

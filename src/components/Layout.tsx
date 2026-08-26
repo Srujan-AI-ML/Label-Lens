@@ -36,14 +36,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                         onClick={() => onNavigate('home')}
                         className="flex items-center gap-3 group cursor-pointer"
                     >
-                        <div className="p-2 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl shadow-lg shadow-indigo-600/30 group-hover:shadow-indigo-600/50 transition-shadow">
+                        <div className="p-2 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl shadow-lg shadow-blue-600/30 group-hover:shadow-blue-600/50 transition-shadow">
                             <Scale size={22} className="text-white" />
                         </div>
                         <div className="text-left">
-                            <h1 className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent">
-                                Legal Metrology
+                            <h1 className="text-lg font-black bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-400 dark:to-blue-500 bg-clip-text text-transparent tracking-tight">
+                                Label Lens
                             </h1>
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-0.5">Compliance Checking System</p>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-0.5">Scanner & Verifier</p>
                         </div>
                     </button>
 
@@ -57,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                     key={item.id}
                                     onClick={() => onNavigate(item.id)}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${isActive
-                                        ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                                         }`}
                                 >
@@ -80,7 +80,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                         onNavigate('scan');
                                     }
                                 }}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-full text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
                             >
                                 <Plus size={15} />
                                 <span className="hidden sm:inline">Add / Scan Product</span>
@@ -100,9 +100,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                         {/* User Profile & Logout */}
                         {user && (
                             <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-                                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
-                                    <User size={14} className="text-indigo-600 dark:text-indigo-400" />
-                                    <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
+                                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-full">
+                                    <User size={14} className="text-blue-600 dark:text-blue-400" />
+                                    <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
                                         {user.username}
                                     </span>
                                 </div>
@@ -130,7 +130,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                 key={item.id}
                                 onClick={() => onNavigate(item.id)}
                                 className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all cursor-pointer ${isActive
-                                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                                    ? 'text-blue-600 dark:text-blue-400 font-bold'
                                     : 'text-gray-400 dark:text-gray-500'
                                     }`}
                             >

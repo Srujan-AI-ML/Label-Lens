@@ -272,14 +272,15 @@ export function analyseCompliance(
   const complianceScore = Math.min(100, criticalScore + majorScore + minorScore);
 
   // Status
-  const criticalFails = violations.filter(v => v.severity === 'critical').length;
   let complianceStatus: ComplianceStatus;
-  if (criticalFails === 0 && violations.length <= 1) {
+  const totalChecked = criticalChecks.length + majorChecks.length + minorChecks.length; // 10
+
+  if (violations.length === 0) {
     complianceStatus = 'Compliant';
-  } else if (criticalFails === 0 && violations.length <= 3) {
-    complianceStatus = 'Partially Compliant';
-  } else {
+  } else if (violations.length === totalChecked) {
     complianceStatus = 'Non-Compliant';
+  } else {
+    complianceStatus = 'Partially Compliant';
   }
 
   return { declarations, violations, complianceScore, complianceStatus };

@@ -15,6 +15,88 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
+    const handleDownloadSummary = async () => {
+        try {
+            const { jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
+
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            // Set Title & Metadata
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(20);
+            doc.setTextColor(29, 78, 216); // Blue-700
+            doc.text('Label Lens', 14, 20);
+            
+            doc.setFontSize(13);
+            doc.setTextColor(75, 85, 99);
+            doc.text('Product Inspections Registry Summary', 14, 28);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 34);
+            doc.text(`Total Records Listed: ${filteredProducts.length}`, 14, 39);
+
+            // Table headers and rows
+            const tableHeaders = [['Product Name', 'Compliance Status', 'Score', 'Rule Violations & Non-Compliance Causes']];
+            const tableRows = filteredProducts.map(p => {
+                const statusText = p.complianceStatus;
+                const scoreText = `${p.complianceScore}%`;
+                const violationsText = p.violations && p.violations.length > 0
+                    ? p.violations.map((v, idx) => `${idx + 1}. [${v.severity.toUpperCase()}] ${v.label}: ${v.message}`).join('\n')
+                    : 'None (Complies fully with all declarations)';
+
+                return [
+                    p.productName,
+                    statusText,
+                    scoreText,
+                    violationsText
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 45,
+                head: tableHeaders,
+                body: tableRows,
+                theme: 'striped',
+                headStyles: {
+                    fillColor: [29, 78, 216], // Blue-700
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 9
+                },
+                bodyStyles: {
+                    fontSize: 8,
+                    valign: 'top'
+                },
+                columnStyles: {
+                    0: { cellWidth: 45 },
+                    1: { cellWidth: 35 },
+                    2: { cellWidth: 15 },
+                    3: { cellWidth: 90 }
+                },
+                didDrawPage: (data) => {
+                    doc.setFontSize(8);
+                    doc.setTextColor(156, 163, 175);
+                    doc.text(
+                        `Page ${data.pageNumber} of ${doc.getNumberOfPages()}`,
+                        doc.internal.pageSize.width - 25,
+                        doc.internal.pageSize.height - 10
+                    );
+                }
+            });
+
+            doc.save(`Label_Lens_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
+        } catch (err: any) {
+            console.error('Error generating PDF summary:', err);
+            alert('Failed to generate summary PDF: ' + err.message);
+        }
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Compliant':
@@ -62,8 +144,8 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
             {/* Header */}
             <div className="mb-8">
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <Package className="text-indigo-600 dark:text-indigo-400" />
-                    Products & Inspections Registry
+                    <Package className="text-blue-600 dark:text-blue-400" />
+                    Label Lens Product Registry
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">
                     Search, view, and retrieve previous inspections, packaging evidence, and digital compliance reports.
@@ -72,16 +154,27 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
 
             {/* Filters Bar */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
-                {/* Search */}
-                <div className="relative w-full md:max-w-md">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search by product name or barcode..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-900 dark:text-white"
-                    />
+                {/* Search & Summarize */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:max-w-xl">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search by product name or barcode..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-white"
+                        />
+                    </div>
+                    <button
+                        onClick={handleDownloadSummary}
+                        disabled={filteredProducts.length === 0}
+                        className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-bold rounded-2xl text-sm transition-all shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                        title="Download compliance summary of filtered products in PDF format"
+                    >
+                        <FileText size={16} />
+                        Download Summary PDF
+                    </button>
                 </div>
 
                 {/* Status Filter */}
@@ -94,7 +187,7 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                                 onClick={() => setStatusFilter(status)}
                                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                     statusFilter === status
-                                        ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                                 }`}
                             >

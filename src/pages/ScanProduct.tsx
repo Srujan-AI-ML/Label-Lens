@@ -266,11 +266,11 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             {/* Page Header */}
             <div className="mb-8">
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <ScanLine className="text-indigo-600 dark:text-indigo-400" />
+                    <ScanLine className="text-blue-600 dark:text-blue-400" />
                     Packaging Inspection & Compliance Analysis
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-                    Enter product specifics in the grid below or upload/scan packaging to check Legal Metrology (Packaged Commodities) Rules, 2011.
+                    Enter product specifics in the grid below or upload/scan packaging to check declarations compliance under the Label Lens verifier.
                 </p>
             </div>
 
@@ -306,7 +306,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 type="button"
                                 onClick={() => setShowCamera(true)}
                                 disabled={isScanning}
-                                className="flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-400 text-white font-bold rounded-2xl shadow-md transition-all cursor-pointer text-xs sm:text-sm"
+                                className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-bold rounded-2xl shadow-md transition-all cursor-pointer text-xs sm:text-sm"
                             >
                                 <Camera size={18} />
                                 Capture with Camera
@@ -337,7 +337,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         )}
 
                         {scanStatus && (
-                            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
                                 <Sparkles size={15} />
                                 <span>{scanStatus}</span>
                             </div>
@@ -355,7 +355,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     Enter or verify each declaration item to calculate compliance
                                 </p>
                             </div>
-                            <span className="text-xs font-bold px-3 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-full">
+                            <span className="text-xs font-bold px-3 py-1 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-full">
                                 {Object.values(liveAnalysis.declarations).filter(d => d.present).length} / 10 Met
                             </span>
                         </div>
@@ -567,7 +567,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         {/* Raw Text Fallback Area */}
                         <div className="pt-2">
                             <details className="cursor-pointer group">
-                                <summary className="text-xs font-bold text-indigo-600 dark:text-indigo-400 list-none flex items-center justify-between py-1">
+                                <summary className="text-xs font-bold text-blue-600 dark:text-blue-400 list-none flex items-center justify-between py-1">
                                     <span>✍️ Optional: Raw Label Text Override</span>
                                     <span className="group-open:rotate-180 transition-transform">▼</span>
                                 </summary>
@@ -607,7 +607,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 type="button"
                                 onClick={() => handleSaveAndSubmit('report')}
                                 disabled={isScanning}
-                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-850 hover:from-blue-500 hover:to-blue-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
                             >
                                 <Sparkles size={16} />
                                 Save & View Certificate
@@ -622,10 +622,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Rules, 2011 Checklist</h3>
-                                <p className="text-[11px] text-gray-400 dark:text-gray-500">Legal Metrology Verification Status</p>
+                                <p className="text-[11px] text-gray-400 dark:text-gray-500">Label Lens Verification Status</p>
                             </div>
                             <div className="text-right">
-                                <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+                                <span className="text-xl font-black text-blue-600 dark:text-blue-400">
                                     {liveAnalysis.complianceScore}%
                                 </span>
                             </div>
@@ -649,7 +649,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                                 type="checkbox"
                                                 checked={isCompliant}
                                                 readOnly
-                                                className="w-4 h-4 rounded text-indigo-600 focus:ring-0 cursor-default"
+                                                className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-default"
                                             />
                                             <span className="font-semibold text-gray-800 dark:text-gray-200 truncate text-[11px]">
                                                 {emoji} {title}
