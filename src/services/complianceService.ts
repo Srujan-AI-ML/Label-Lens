@@ -49,8 +49,8 @@ function extractGenericName(text: string): ComplianceDeclaration {
 
 function extractManufacturer(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:manufactured|mfd|packed|marketed|imported)\s+by\s*[:\-]?\s*([^\n]{5,120})/i,
-    /(?:manufacturer|packer|importer)\s*[:\-]\s*([^\n]{5,120})/i,
+    /(?:manufactured|mfd|packed|marketed|imported|distributed|dist)\s+by\s*[:\-]?\s*([^\n]{5,120})/i,
+    /(?:manufacturer|packer|importer|distributor)\s*[:\-]\s*([^\n]{5,120})/i,
     /(?:mfr|mfg)\s*[:\-]\s*([^\n]{5,120})/i,
   ];
   const value = firstMatch(text, patterns);
@@ -60,11 +60,11 @@ function extractManufacturer(text: string): ComplianceDeclaration {
 
 function extractNetQuantity(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:net\s*(?:qty|quantity|wt|weight|vol|volume|content))\s*[:\-]?\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pieces?|pcs?|nos?|number|unit|pack))/i,
-    /(?:net)\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?))\b/i,
-    /([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?))\s*net/i,
+    /(?:net\s*(?:qty|quantity|wt|weight|vol|volume|content))\s*[:\-]?\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pieces?|pcs?|nos?|number|unit|pack|oz|ounce|lbs?|pound))/i,
+    /(?:net)\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?|oz|lbs?))\b/i,
+    /([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?|oz|lbs?))\s*net/i,
     // standalone unit pattern
-    /\b([\d.,]+\s*(?:kg|gm|gms|ml|ltr|litre|pcs|nos))\b/i,
+    /\b([\d.,]+\s*(?:kg|gm|gms|ml|ltr|litre|pcs|nos|oz|lbs?))\b/i,
   ];
   const value = firstMatch(text, patterns);
   if (value) return makeDeclaration(true, value.trim(), 'high');
@@ -73,8 +73,8 @@ function extractNetQuantity(text: string): ComplianceDeclaration {
 
 function extractManufactureDate(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:mfg|mfd|manufactured|packing|packed|mfg\.?\s*date|manufacture\s*date)\s*[:\-]?\s*((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s/\-.,]*\d{2,4}|\d{1,2}[\s/\-]\d{2,4}|\d{2}[\s/\-]\d{2,4})/i,
-    /mfg\s*[:\-]?\s*(\d{2}[\/\-]\d{4})/i,
+    /(?:mfg|mfd|manufactured|packing|packed|mfg\.?\s*date|manufacture\s*date)\s*[:\-]?\s*((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s/\-\.,]*\d{2,4}|\d{1,2}[\s/\-\.]\d{2,4}|\d{2}[\s/\-\.]\d{2,4})/i,
+    /mfg\s*[:\-]?\s*(\d{2}[\/\-\.]\d{4})/i,
   ];
   const value = firstMatch(text, patterns);
   if (value) return makeDeclaration(true, value.trim(), 'high');
@@ -123,8 +123,8 @@ function extractConsumerCare(text: string): ComplianceDeclaration {
 
 function extractBestBefore(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:best\s*before|use\s*by|expiry|exp\.?|best\s*before\s*end|bbe)\s*[:\-]?\s*([\d]{1,2}[\s\/\-][\d]{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i,
-    /(?:exp|expiry)\s*[:\-]?\s*(\d{2}[\/-]\d{2,4})/i,
+    /(?:best\s*before|use\s*by|expiry|exp\.?|best\s*before\s*end|bbe)\s*[:\-]?\s*([\d]{1,2}[\s\/\-\.][\d]{1,2}[\s\/\-\.]?[\d]{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i,
+    /(?:exp|expiry)\s*[:\-]?\s*(\d{2}[\/\-\.]\d{2,4})/i,
   ];
   const value = firstMatch(text, patterns);
   if (value) return makeDeclaration(true, value.trim(), 'high');

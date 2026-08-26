@@ -284,83 +284,76 @@ async function detectBarcodeViaBrowser(base64Image: string): Promise<string | nu
     }
 }
 
-// Detect barcode from image using Cloud Vision
 export async function detectBarcode(base64Image: string): Promise<string | null> {
-    // If Google Cloud Vision is not configured, use the browser BarcodeDetector API
-    if (!hasVisionCredentials()) {
-        console.log('Google Cloud Vision not configured — using browser BarcodeDetector.');
-        return detectBarcodeViaBrowser(base64Image);
-    }
+    try {
+        // If Google Cloud Vision is not configured, use the browser BarcodeDetector API
+        if (!hasVisionCredentials()) {
+            console.log('Google Cloud Vision not configured — using browser BarcodeDetector.');
+            return detectBarcodeViaBrowser(base64Image);
+        }
 
-    const accessToken = await getAccessToken();
+        const accessToken = await getAccessToken();
 
-    const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            requests: [{
-                image: { content: base64Image },
-                features: [
-                    { type: 'TEXT_DETECTION' }
-                ]
-            }]
-        })
-    });
+        const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                requests: [{
+                    image: { content: base64Image },
+                    features: [
+                        { type: 'TEXT_DETECTION' }
+                    ]
+                }]
+            })
+        });
 
-    const data = await response.json();
-    console.log('Barcode Detection Response:', data);
+        const data = await response.json();
+        console.log('Barcode Detection Response:', data);
 
-    // Get all text from the image
-    const text = data.responses?.[0]?.fullTextAnnotation?.text ||
-        data.responses?.[0]?.textAnnotations?.[0]?.description || '';
+        // Get all text from the image
+        const text = data.responses?.[0]?.fullTextAnnotation?.text ||
+            data.responses?.[0]?.textAnnotations?.[0]?.description || '';
 
-    console.log('Extracted text from barcode image:', text);
+        console.log('Extracted text from barcode image:', text);
 
-    // Remove all whitespace and newlines, then look for barcode patterns
-    const cleanText = text.replace(/\s+/g, '');
-    console.log('Cleaned text:', cleanText);
+        // Remove all whitespace and newlines, then look for barcode patterns
+        const cleanText = text.replace(/\s+/g, '');
+        console.log('Cleaned text:', cleanText);
 
-    // Look for barcode patterns (8-14 digit numbers)
-    // EAN-13: 13 digits, EAN-8: 8 digits, UPC-A: 12 digits
-    const barcodePattern = /(\d{8,14})/g;
-    const matches = cleanText.match(barcodePattern);
+        // Look for barcode patterns (8-14 digit numbers)
+        // EAN-13: 13 digits, EAN-8: 8 digits, UPC-A: 12 digits
+        const barcodePattern = /(\d{8,14})/g;
+        const matches = cleanText.match(barcodePattern);
 
-    console.log('Barcode pattern matches:', matches);
+        console.log('Barcode pattern matches:', matches);
 
-    if (matches && matches.length > 0) {
-        // Filter to valid barcode lengths (8, 12, 13, 14)
-        const validBarcodes = matches.filter((m: string) =>
-            m.length === 8 || m.length === 12 || m.length === 13 || m.length === 14
-        );
+        if (matches && matches.length > 0) {
+            // Filter to valid barcode lengths (8, 12, 13, 14)
+            const validBarcodes = matches.filter((m: string) =>
+                m.length === 8 || m.length === 12 || m.length === 13 || m.length === 14
+            );
 
-        if (validBarcodes.length > 0) {
-            // Return the longest valid barcode
-            const barcode = validBarcodes.sort((a: string, b: string) => b.length - a.length)[0];
-            console.log('Detected barcode:', barcode);
+            if (validBarcodes.length > 0) {
+                // Return the longest valid barcode
+                const barcode = validBarcodes.sort((a: string, b: string) => b.length - a.length)[0];
+                console.log('Detected barcode:', barcode);
+                return barcode;
+            }
+
+            // If no valid length, return the longest match anyway
+            const barcode = matches.sort((a: string, b: string) => b.length - a.length)[0];
+            console.log('Using longest match as barcode:', barcode);
             return barcode;
         }
 
-        // If no valid length, return the longest match anyway
-        const barcode = matches.sort((a: string, b: string) => b.length - a.length)[0];
-        console.log('Using longest match as barcode:', barcode);
-        return barcode;
+        return null;
+    } catch (err) {
+        console.warn('Vision barcode detection failed, falling back to browser detection:', err);
+        return detectBarcodeViaBrowser(base64Image);
     }
-
-    // Try to find numbers with spaces (like "8 901725 015275")
-    const spacedPattern = /(\d[\d\s]{10,})/g;
-    const spacedMatches = text.match(spacedPattern);
-
-    if (spacedMatches && spacedMatches.length > 0) {
-        const barcode = spacedMatches[0].replace(/\s/g, '');
-        console.log('Found spaced barcode:', barcode);
-        return barcode;
-    }
-
-    console.log('No barcode found in image');
-    return null;
 }
 
 // Hardcoded barcode map for known products (skip API calls)

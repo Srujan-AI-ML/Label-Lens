@@ -11,6 +11,44 @@ import {
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 import type { PageType } from '../App';
 
+function formatToISODate(dateStr: string): string {
+    if (!dateStr) return '';
+    const cleanStr = dateStr.trim();
+
+    // 1. If it's already YYYY-MM-DD, return it
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+        return cleanStr;
+    }
+
+    // 2. If it's DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+    const dmyMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{4})$/);
+    if (dmyMatch) {
+        const day = dmyMatch[1].padStart(2, '0');
+        const month = dmyMatch[2].padStart(2, '0');
+        const year = dmyMatch[3];
+        return `${year}-${month}-${day}`;
+    }
+
+    // 3. If it's MM/YYYY or MM.YYYY or MM-YYYY
+    const myMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{4})$/);
+    if (myMatch) {
+        const month = myMatch[1].padStart(2, '0');
+        const year = myMatch[2];
+        return `${year}-${month}-01`;
+    }
+
+    // 4. Try parsing with standard Date object
+    const parsed = new Date(cleanStr);
+    if (!isNaN(parsed.getTime())) {
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    return '';
+}
+
 interface ScanProductProps {
     onNavigate: (page: PageType) => void;
     onSelectProduct: (product: ScannedProduct) => void;
@@ -108,10 +146,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             setMrp(cleanMrp);
         }
         if (decs.manufactureDate?.present && decs.manufactureDate.value) {
-            setMfgDate(decs.manufactureDate.value);
+            setMfgDate(formatToISODate(decs.manufactureDate.value));
         }
         if (decs.bestBefore?.present && decs.bestBefore.value) {
-            setExpiryDate(decs.bestBefore.value);
+            setExpiryDate(formatToISODate(decs.bestBefore.value));
         }
         if (decs.manufacturer?.present && decs.manufacturer.value) {
             setManufacturer(decs.manufacturer.value);
