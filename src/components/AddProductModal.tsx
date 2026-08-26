@@ -180,6 +180,21 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         if (decs.retailSalePrice?.present && decs.retailSalePrice.value) {
             setUnitPrice(decs.retailSalePrice.value);
         }
+
+        // Fallback barcode detection from extracted text
+        if (!barcode.trim() || barcode.trim() === '') {
+            const barcodeRegex = /(?:barcode|gtin|upc|ean)\s*[:\-]?\s*(\d{8,15})/i;
+            const match = extractedText.match(barcodeRegex);
+            if (match) {
+                setBarcode(match[1].trim());
+            } else {
+                const cleanText = extractedText.replace(/\s+/g, '');
+                const standaloneMatch = cleanText.match(/(\d{8,15})/);
+                if (standaloneMatch) {
+                    setBarcode(standaloneMatch[1]);
+                }
+            }
+        }
     };
 
     const processUploadedImage = async (imageSrc: string) => {

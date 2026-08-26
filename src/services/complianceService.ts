@@ -25,7 +25,7 @@ function makeDeclaration(
 function firstMatch(text: string, patterns: RegExp[]): string | null {
   for (const re of patterns) {
     const m = text.match(re);
-    if (m) return m[0].trim();
+    if (m) return m[1] ? m[1].trim() : m[0].trim();
   }
   return null;
 }

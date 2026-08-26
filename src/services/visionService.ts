@@ -85,6 +85,7 @@ export async function extractTextFromImage(base64Image: string): Promise<string>
         SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY');
 
     const MOCK_LABEL_TEXT = `PRODUCT: Premium Butter Cookies
+BARCODE: 8901058005080
 MANUFACTURED BY: Britannia Industries Ltd, 5/1A Hungerford Street, Kolkata - 700017
 NET QUANTITY: 250 g
 MRP: Rs. 150.00 (incl. of all taxes)
