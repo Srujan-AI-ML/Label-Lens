@@ -57,20 +57,6 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                     <ArrowLeft size={16} />
                     Return to Dashboard
                 </button>
-
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (onOpenAddModal) onOpenAddModal();
-                            else onNavigate('scan');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-                    >
-                        <Plus size={15} />
-                        + Add / Scan Product
-                    </button>
-                </div>
             </div>
 
             {/* Header */}

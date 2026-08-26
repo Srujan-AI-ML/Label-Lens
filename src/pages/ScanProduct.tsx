@@ -18,7 +18,6 @@ interface ScanProductProps {
 
 export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectProduct }) => {
     const { addScanResult } = useProduct();
-    const [mode, setMode] = useState<'scan' | 'manual'>('manual');
     const [showCamera, setShowCamera] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [scanStatus, setScanStatus] = useState('');
@@ -200,30 +199,6 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 </button>
 
                 <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setMode('manual')}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            mode === 'manual'
-                                ? 'bg-indigo-600 text-white shadow-md'
-                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                        <span>✍️</span> Specifics Grid Form
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setMode('scan')}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            mode === 'scan'
-                                ? 'bg-indigo-600 text-white shadow-md'
-                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                        <ScanLine size={14} /> 📷 Camera & Upload
-                    </button>
-
                     <button
                         type="button"
                         onClick={() => onNavigate('home')}
