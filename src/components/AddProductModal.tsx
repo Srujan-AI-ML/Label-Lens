@@ -51,7 +51,6 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
 
     // Build synthesized label text from the specific fields
     const synthesizedText = useMemo(() => {
-        if (rawText.trim()) return rawText;
         const parts: string[] = [];
         if (productName) parts.push(`Product: ${productName}`);
         if (manufacturer) parts.push(`Manufactured by: ${manufacturer}`);
@@ -64,7 +63,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         if (countryOfOrigin) parts.push(`Country of Origin: ${countryOfOrigin}`);
         if (unitPrice) parts.push(`Unit Sale Price: ${unitPrice}`);
         return parts.join('\n');
-    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice, rawText]);
+    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
 
     // Live Legal Metrology Compliance Analysis
     const liveAnalysis = useMemo(() => {
