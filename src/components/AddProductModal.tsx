@@ -93,6 +93,58 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         reader.readAsDataURL(file);
     };
 
+    const autoPopulateFromText = (extractedText: string) => {
+        const analysis = analyseCompliance(extractedText, productName);
+        const decs = analysis.declarations;
+
+        if (decs.genericName?.present && decs.genericName.value) {
+            setProductName(decs.genericName.value);
+        }
+        if (decs.netQuantity?.present && decs.netQuantity.value) {
+            const qtyMatch = decs.netQuantity.value.match(/([\d.,]+)\s*([a-zA-Z]+)/);
+            if (qtyMatch) {
+                setNetQuantity(qtyMatch[1]);
+                const unit = qtyMatch[2].toLowerCase();
+                if (['g', 'kg', 'ml', 'l', 'pcs', 'units'].includes(unit)) {
+                    setQuantityUnit(unit === 'l' ? 'L' : unit);
+                }
+            } else {
+                setNetQuantity(decs.netQuantity.value);
+            }
+        }
+        if (decs.mrp?.present && decs.mrp.value) {
+            const cleanMrp = decs.mrp.value.replace(/[₹\s,]/g, '');
+            setMrp(cleanMrp);
+        }
+        if (decs.manufactureDate?.present && decs.manufactureDate.value) {
+            setMfgDate(decs.manufactureDate.value);
+        }
+        if (decs.bestBefore?.present && decs.bestBefore.value) {
+            setExpiryDate(decs.bestBefore.value);
+        }
+        if (decs.manufacturer?.present && decs.manufacturer.value) {
+            setManufacturer(decs.manufacturer.value);
+        }
+        if (decs.consumerCare?.present && decs.consumerCare.value) {
+            setConsumerCare(decs.consumerCare.value);
+        }
+        if (decs.fssaiLicense?.present && decs.fssaiLicense.value) {
+            const fssaiMatch = decs.fssaiLicense.value.match(/\d{14}/);
+            if (fssaiMatch) {
+                setFssaiLicense(fssaiMatch[0]);
+            } else {
+                setFssaiLicense(decs.fssaiLicense.value);
+            }
+        }
+        if (decs.countryOfOrigin?.present && decs.countryOfOrigin.value) {
+            const cleanOrigin = decs.countryOfOrigin.value.replace(/\(inferred\)/i, '').trim();
+            setCountryOfOrigin(cleanOrigin);
+        }
+        if (decs.retailSalePrice?.present && decs.retailSalePrice.value) {
+            setUnitPrice(decs.retailSalePrice.value);
+        }
+    };
+
     const processUploadedImage = async (imageSrc: string) => {
         setIsProcessing(true);
         setStatusMsg('Scanning image and reading packaging declarations...');
@@ -116,6 +168,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 const text = await extractTextFromImage(base64Data);
                 if (text) {
                     setRawText(text);
+                    autoPopulateFromText(text);
                     setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
                 }
             } catch (ocrErr: any) {
