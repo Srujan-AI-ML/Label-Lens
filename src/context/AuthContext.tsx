@@ -26,16 +26,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Check for existing session on mount
     useEffect(() => {
-        const savedUser = localStorage.getItem('smartbite-user');
-        const token = localStorage.getItem('smartbite-token');
+        const savedUser = localStorage.getItem('labellens-user');
+        const token = localStorage.getItem('labellens-token');
 
         if (savedUser && token) {
             try {
                 setUser(JSON.parse(savedUser));
             } catch {
                 // Invalid saved user, clear storage
-                localStorage.removeItem('smartbite-user');
-                localStorage.removeItem('smartbite-token');
+                localStorage.removeItem('labellens-user');
+                localStorage.removeItem('labellens-token');
             }
         }
         setIsLoading(false);
@@ -45,28 +45,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const response = await authAPI.login(username, password);
         setToken(response.token);
         setUser(response.user);
-        localStorage.setItem('smartbite-user', JSON.stringify(response.user));
+        localStorage.setItem('labellens-user', JSON.stringify(response.user));
     };
 
     const register = async (username: string, password: string) => {
         const response = await authAPI.register(username, password);
         setToken(response.token);
         setUser(response.user);
-        localStorage.setItem('smartbite-user', JSON.stringify(response.user));
+        localStorage.setItem('labellens-user', JSON.stringify(response.user));
     };
 
     const loginWithGoogle = async (credential: string) => {
         const response = await authAPI.googleLogin(credential);
         setToken(response.token);
         setUser(response.user);
-        localStorage.setItem('smartbite-user', JSON.stringify(response.user));
+        localStorage.setItem('labellens-user', JSON.stringify(response.user));
     };
 
     const logout = () => {
         removeToken();
         setUser(null);
-        localStorage.removeItem('smartbite-user');
-        localStorage.removeItem('smart-bite-items'); // Clear old local storage items
+        localStorage.removeItem('labellens-user');
+        localStorage.removeItem('label-lens-items'); // Clear old local storage items
     };
 
     return (

@@ -3,17 +3,17 @@ const API_BASE = '/api';
 
 // Get auth token from localStorage
 const getToken = (): string | null => {
-    return localStorage.getItem('smartbite-token');
+    return localStorage.getItem('labellens-token');
 };
 
 // Set auth token
 export const setToken = (token: string): void => {
-    localStorage.setItem('smartbite-token', token);
+    localStorage.setItem('labellens-token', token);
 };
 
 // Remove auth token
 export const removeToken = (): void => {
-    localStorage.removeItem('smartbite-token');
+    localStorage.removeItem('labellens-token');
 };
 
 // Generic fetch with auth

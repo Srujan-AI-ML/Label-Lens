@@ -4,7 +4,7 @@
 **Contact:** asgaladechronicles@gmail.com  
 **Version:** 1.0.0
 
-This document provides a comprehensive technical overview of **Label Lens** (Smart-Bite), designed for developers, maintainers, and hackathon technical evaluators.
+This document provides a comprehensive technical overview of **Label Lens**, designed for developers, maintainers, and hackathon technical evaluators.
 
 ---
 

@@ -1,7 +1,7 @@
 {
-    "name": "Smart Bite",
-    "short_name": "SmartBite",
-    "description": "Smart Food Inventory Manager - Track expiry dates and get recipe suggestions",
+    "name": "Label Lens",
+    "short_name": "LabelLens",
+    "description": "Label Lens Compliance Checker - Scan and verify mandatory packaging declarations",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

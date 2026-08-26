@@ -115,8 +115,8 @@ Validates all **10 mandatory declarations** required under the Legal Metrology (
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/Srujan-AI-ML/Smart-Bite.git
-cd Smart-Bite
+git clone https://github.com/Srujan-AI-ML/Label-Lens.git
+cd Label-Lens
 ```
 
 ### 2. Install dependencies
@@ -163,7 +163,7 @@ Open `http://localhost:5173` in your browser.
 |---|---|
 | **Name** | Srujan |
 | **GitHub** | [Srujan-AI-ML](https://github.com/Srujan-AI-ML) |
-| **Repository** | [Smart-Bite](https://github.com/Srujan-AI-ML/Smart-Bite) |
+| **Repository** | [Label-Lens](https://github.com/Srujan-AI-ML/Label-Lens) |
 | **Email** | asgaladechronicles@gmail.com |
 
 ---

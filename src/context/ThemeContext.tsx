@@ -10,7 +10,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
         // Check localStorage first
-        const saved = localStorage.getItem('smart-bite-dark-mode');
+        const saved = localStorage.getItem('label-lens-dark-mode');
         if (saved !== null) {
             return saved === 'true';
         }
@@ -20,7 +20,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         // Update localStorage
-        localStorage.setItem('smart-bite-dark-mode', String(isDarkMode));
+        localStorage.setItem('label-lens-dark-mode', String(isDarkMode));
 
         // Update document class
         if (isDarkMode) {
