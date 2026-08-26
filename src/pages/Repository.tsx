@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Plus, Package } from 'lucide-react';
+import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Package } from 'lucide-react';
 import type { ScannedProduct } from '../types';
 import type { PageType } from '../App';
 
@@ -10,7 +10,7 @@ interface RepositoryProps {
     onOpenAddModal?: () => void;
 }
 
-export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProduct, onOpenAddModal }) => {
+export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProduct, onOpenAddModal: _onOpenAddModal }) => {
     const { products, removeScanRecord } = useProduct();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');

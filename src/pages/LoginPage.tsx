@@ -43,7 +43,7 @@ export const LoginPage: React.FC = () => {
         uppercase: /[A-Z]/.test(password),
         digit: /[0-9]/.test(password),
     };
-    const pwStrong = pwChecks.length && pwChecks.uppercase && pwChecks.digit;
+    const _pwStrong = pwChecks.length && pwChecks.uppercase && pwChecks.digit; // reserved for future use
 
     // Load Google Identity Services script
     useEffect(() => {
