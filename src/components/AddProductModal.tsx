@@ -44,7 +44,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     const [unitPrice, setUnitPrice] = useState('');
     const [category, setCategory] = useState('Food & Beverage');
     const [notes, setNotes] = useState('');
-    const [rawText, setRawText] = useState('');
+    const [_rawText, setRawText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
