@@ -176,19 +176,25 @@ export const LoginPage: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Google Sign-In Button */}
-                    <div className="mb-6">
-                        <div
-                            ref={googleButtonRef}
-                            className="flex justify-center"
-                        />
-                        {googleLoading && (
-                            <div className="flex justify-center mt-3">
-                                <Loader size={20} className="animate-spin text-emerald-500" />
-                                <span className="ml-2 text-sm text-gray-500">Signing in with Google...</span>
-                            </div>
-                        )}
-                    </div>
+                    {/* Google Sign-In Button — only shown when Client ID is configured */}
+                    {GOOGLE_CLIENT_ID ? (
+                        <div className="mb-6">
+                            <div
+                                ref={googleButtonRef}
+                                className="flex justify-center"
+                            />
+                            {googleLoading && (
+                                <div className="flex justify-center mt-3">
+                                    <Loader size={20} className="animate-spin text-emerald-500" />
+                                    <span className="ml-2 text-sm text-gray-500">Signing in with Google...</span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="mb-6 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-400 text-center">
+                            🔑 Google Sign-In not configured — add <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> to <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">.env</code>
+                        </div>
+                    )}
 
                     {/* Divider */}
                     <div className="relative mb-6">
