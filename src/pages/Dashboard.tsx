@@ -77,7 +77,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                         className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/35 transition-all text-xs sm:text-sm cursor-pointer hover:scale-105 active:scale-95"
                     >
                         <Plus size={18} />
-                        + Add New Product / Scan
+                        Add New Product / Scan
                     </button>
                 </div>
             </div>

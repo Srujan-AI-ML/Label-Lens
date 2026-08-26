@@ -154,7 +154,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                 <button
                     type="button"
                     onClick={handleClose}
-                    className="w-11 h-11 rounded-full bg-white/20 hover:bg-rose-600 active:bg-rose-700 backdrop-blur-xl flex items-center justify-center text-white transition-all border border-white/20 shadow-xl cursor-pointer"
+                    className="w-11 h-11 rounded-full bg-white/20 hover:bg-red-600 active:bg-red-750 backdrop-blur-xl flex items-center justify-center text-white transition-colors duration-200 border border-white/20 shadow-xl cursor-pointer"
                     title="Close scanner and return to menu"
                 >
                     <X size={22} />
@@ -296,53 +296,48 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                                     </div>
                                 )}
 
-                                {/* Working Enter Manually Link */}
-                                <button
-                                    type="button"
-                                    onClick={handleManualClick}
-                                    className="mt-3 pointer-events-auto bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-full backdrop-blur-md border border-white/15 flex items-center gap-2 transition-all cursor-pointer shadow-lg"
-                                >
-                                    <PenLine size={14} className="text-indigo-400" />
-                                    ✍️ Or Click Here to Enter Details Manually
-                                </button>
+                                 {/* Enter details manually removed from pointer-events-none overlay */}
                             </div>
                         )}
                     </div>
 
                     {/* Bottom Controls */}
                     {!error && (
-                        <div className="absolute bottom-0 left-0 right-0 p-6 pb-10 flex justify-between items-center z-20 bg-gradient-to-t from-black/80 to-transparent">
-                            {/* Flash / Switch Camera */}
-                            <button
-                                type="button"
-                                onClick={handleSwitchCamera}
-                                className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
-                                title="Switch Camera"
-                            >
-                                <RefreshCw size={20} />
-                            </button>
+                        <div className="absolute bottom-0 left-0 right-0 p-6 pb-8 flex flex-col items-center gap-4 z-20 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+                            {/* Flash / Switch Camera and Capture Button Row */}
+                            <div className="flex items-center justify-center gap-6 w-full max-w-xs relative">
+                                {/* Flash / Switch Camera */}
+                                <button
+                                    type="button"
+                                    onClick={handleSwitchCamera}
+                                    className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 flex items-center justify-center text-white transition-all cursor-pointer absolute left-0"
+                                    title="Switch Camera"
+                                >
+                                    <RefreshCw size={20} />
+                                </button>
 
-                            {/* Capture Button */}
-                            <button
-                                type="button"
-                                onClick={handleCapture}
-                                disabled={!isReady}
-                                className="relative w-20 h-20 rounded-full border-4 border-white/40 flex items-center justify-center group hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-2xl"
-                                title="Take Photo"
-                            >
-                                <div className={`w-16 h-16 bg-white rounded-full group-hover:bg-indigo-500 transition-colors flex items-center justify-center ${!isReady ? 'opacity-50' : ''}`}>
-                                    <Camera size={26} className="text-gray-900 group-hover:text-white transition-colors" />
-                                </div>
-                            </button>
+                                {/* Capture Button */}
+                                <button
+                                    type="button"
+                                    onClick={handleCapture}
+                                    disabled={!isReady}
+                                    className="w-20 h-20 rounded-full border-4 border-white/40 flex items-center justify-center group hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-2xl bg-black/10"
+                                    title="Take Photo"
+                                >
+                                    <div className={`w-16 h-16 bg-white rounded-full group-hover:bg-indigo-600 transition-colors flex items-center justify-center ${!isReady ? 'opacity-50' : ''}`}>
+                                        <Camera size={26} className="text-gray-900 group-hover:text-white transition-colors" />
+                                    </div>
+                                </button>
+                            </div>
 
-                            {/* Return Button */}
+                            {/* Enter details manually button directly under capture button */}
                             <button
                                 type="button"
-                                onClick={handleClose}
-                                className="w-12 h-12 rounded-full bg-rose-600/80 hover:bg-rose-600 active:scale-95 backdrop-blur-md border border-rose-400/40 flex items-center justify-center text-white transition-all cursor-pointer shadow-lg"
-                                title="Cancel and return"
+                                onClick={handleManualClick}
+                                className="bg-white/15 hover:bg-indigo-600 hover:border-indigo-500 active:scale-95 text-white text-xs font-semibold px-5 py-2.5 rounded-full border border-white/15 flex items-center gap-2 transition-all cursor-pointer shadow-lg hover:shadow-indigo-600/35"
                             >
-                                <X size={20} />
+                                <PenLine size={14} className="text-indigo-300" />
+                                ✍️ Enter Details Manually
                             </button>
                         </div>
                     )}
