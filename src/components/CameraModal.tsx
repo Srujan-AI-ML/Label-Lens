@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { X, RefreshCw, AlertCircle, ChevronDown, Video, ScanLine } from 'lucide-react';
+import { X, RefreshCw, AlertCircle, ChevronDown, Video, ScanLine, PenLine, Camera } from 'lucide-react';
 
 interface CameraModalProps {
     onCapture: (imageSrc: string) => void;

@@ -500,6 +500,40 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                 />
                             </div>
+
+                            {/* 12. Category & Notes (Full width) */}
+                            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📦 Commodity Category
+                                    </label>
+                                    <select
+                                        value={category}
+                                        onChange={(e) => setCategory(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    >
+                                        <option value="Food & Beverage">Food & Beverage</option>
+                                        <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
+                                        <option value="Pharmaceutical / Health">Pharmaceutical / Health</option>
+                                        <option value="Household & Cleaning">Household & Cleaning</option>
+                                        <option value="Electronics & Electricals">Electronics & Electricals</option>
+                                        <option value="Other Packaged Goods">Other Packaged Goods</option>
+                                    </select>
+                                </div>
+
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📝 Inspector Field Notes
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Retail store inspection at Sector 4..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Raw Text Fallback Area */}
