@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from '../components/CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
-import { analyseCompliance, buildScanResult } from '../services/complianceService';
+import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
 import { 
     Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
     Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Save, RotateCcw,
@@ -161,29 +161,50 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     setRawText(text);
                     autoPopulateFromText(text);
                     setScanStatus('✅ Text extracted successfully! Review specifics in grid below.');
+
+                    // Determine if any critical fields are missing
+                    const analysis = analyseCompliance(text, productName);
+                    const missingKeys = Object.entries(analysis.declarations)
+                        .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
+                    
+                    if (missingKeys.length > 0) {
+                        alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
+                    }
                 }
             } catch (ocrError: any) {
                 console.warn('OCR notice:', ocrError);
                 setScanStatus('Image attached. Please review/fill the specifics in the grid below.');
+                alert('⚠️ Specific details failed to scan. Please update manually.');
             }
         } catch (err: any) {
             console.error('Scan processing failed:', err);
             setScanStatus('Image loaded. You can fill/edit the specifics grid directly.');
+            alert('⚠️ Specific details failed to scan. Please update manually.');
         } finally {
             setIsScanning(false);
         }
     };
 
     const handleSaveAndSubmit = async (target: 'dashboard' | 'report') => {
-        if (!productName.trim() && !rawText.trim() && !netQuantity.trim()) {
-            alert('Please enter product name or packaging declarations before saving.');
+        const validation = validateProductSpecifics({
+            productName,
+            barcode,
+            netQuantity,
+            mrp,
+            mfgDate,
+            expiryDate,
+            fssaiLicense
+        });
+
+        if (!validation.isValid) {
+            alert(`⚠️ Validation Error:\n${validation.errorMsg}`);
             return;
         }
 
         setIsScanning(true);
         try {
             const nameToUse = productName.trim() || 'Inspected Commodity';
-            const scanData = buildScanResult(synthesizedText, nameToUse, barcode || undefined, imagePreview || undefined);
+            const scanData = buildScanResult(synthesizedText, nameToUse, barcode.trim() || undefined, imagePreview || undefined);
             scanData.category = category;
             scanData.notes = notes;
 
@@ -231,7 +252,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         { key: 'mrp', title: '3. Maximum Retail Price (MRP)', icon: DollarSign, color: 'text-amber-500', emoji: '💰' },
         { key: 'manufactureDate', title: '4. Date of Mfg / Packing', icon: Calendar, color: 'text-violet-500', emoji: '📅' },
         { key: 'bestBefore', title: '5. Best Before / Expiry', icon: Clock, color: 'text-rose-500', emoji: '⌛' },
-        { key: 'manufacturer', title: '6. Manufacturer & Address', icon: Factory, color: 'text-indigo-500', emoji: '🏭' },
+        { key: 'manufacturer', title: '6. Manufacturer & Address', icon: Factory, color: 'text-blue-500', emoji: '🏭' },
         { key: 'consumerCare', title: '7. Consumer Care Helpline', icon: Phone, color: 'text-teal-500', emoji: '📞' },
         { key: 'fssaiLicense', title: '8. FSSAI License No.', icon: Shield, color: 'text-orange-500', emoji: '🛡️' },
         { key: 'countryOfOrigin', title: '9. Country of Origin', icon: Globe, color: 'text-cyan-500', emoji: '🌐' },
@@ -371,7 +392,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. Parle-G Biscuits"
                                     value={productName}
                                     onChange={(e) => setProductName(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -386,12 +407,12 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                         placeholder="e.g. 200"
                                         value={netQuantity}
                                         onChange={(e) => setNetQuantity(e.target.value)}
-                                        className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                     <select
                                         value={quantityUnit}
                                         onChange={(e) => setQuantityUnit(e.target.value)}
-                                        className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     >
                                         <option value="g">g</option>
                                         <option value="kg">kg</option>
@@ -413,7 +434,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. 25.00 (incl. of all taxes)"
                                     value={mrp}
                                     onChange={(e) => setMrp(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
                             </div>
 
@@ -427,7 +448,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. 8901058005080"
                                     value={barcode}
                                     onChange={(e) => setBarcode(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
                             </div>
 
@@ -437,11 +458,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     <span>📅</span> Date of Mfg / Packing *
                                 </label>
                                 <input
-                                    type="text"
-                                    placeholder="e.g. 05/2026"
+                                    type="date"
                                     value={mfgDate}
                                     onChange={(e) => setMfgDate(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -451,11 +471,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     <span>⌛</span> Best Before / Expiry Date
                                 </label>
                                 <input
-                                    type="text"
-                                    placeholder="e.g. 11/2026"
+                                    type="date"
                                     value={expiryDate}
                                     onChange={(e) => setExpiryDate(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -469,7 +488,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. Parle Products Pvt Ltd, V.S. Khandekar Marg, Vile Parle East, Mumbai - 400057"
                                     value={manufacturer}
                                     onChange={(e) => setManufacturer(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -483,7 +502,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. 1800-22-7799 / cs@parle.biz"
                                     value={consumerCare}
                                     onChange={(e) => setConsumerCare(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -497,7 +516,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. 10012022000046"
                                     value={fssaiLicense}
                                     onChange={(e) => setFssaiLicense(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
                             </div>
 
@@ -511,7 +530,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. India"
                                     value={countryOfOrigin}
                                     onChange={(e) => setCountryOfOrigin(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -525,7 +544,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     placeholder="e.g. Rs. 0.15 / g"
                                     value={unitPrice}
                                     onChange={(e) => setUnitPrice(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
 
@@ -538,7 +557,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     <select
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     >
                                         <option value="Food & Beverage">Food & Beverage</option>
                                         <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
@@ -558,7 +577,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                         placeholder="e.g. Retail store inspection at Sector 4..."
                                         value={notes}
                                         onChange={(e) => setNotes(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
                             </div>

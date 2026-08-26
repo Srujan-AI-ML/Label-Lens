@@ -273,17 +273,95 @@ export function analyseCompliance(
 
   // Status
   let complianceStatus: ComplianceStatus;
-  const totalChecked = criticalChecks.length + majorChecks.length + minorChecks.length; // 10
 
-  if (violations.length === 0) {
+  if (complianceScore === 100) {
     complianceStatus = 'Compliant';
-  } else if (violations.length === totalChecked) {
+  } else if (complianceScore === 0) {
     complianceStatus = 'Non-Compliant';
   } else {
     complianceStatus = 'Partially Compliant';
   }
 
   return { declarations, violations, complianceScore, complianceStatus };
+}
+
+// ---- Validation Template -----------------------------------
+
+interface ValidationResult {
+  isValid: boolean;
+  errorMsg: string | null;
+}
+
+export function validateProductSpecifics(data: {
+  productName: string;
+  barcode: string;
+  netQuantity: string;
+  mrp: string;
+  mfgDate: string;
+  expiryDate: string;
+  fssaiLicense: string;
+}): ValidationResult {
+  if (!data.productName.trim()) {
+    return { isValid: false, errorMsg: 'Product Common / Generic Name is required.' };
+  }
+
+  if (data.barcode.trim()) {
+    const cleanBarcode = data.barcode.trim().replace(/\s/g, '');
+    if (!/^\d{8,14}$/.test(cleanBarcode)) {
+      return { isValid: false, errorMsg: 'Barcode must be numeric and between 8 and 14 digits.' };
+    }
+  }
+
+  if (!data.netQuantity.trim()) {
+    return { isValid: false, errorMsg: 'Net Quantity is required.' };
+  } else {
+    const num = parseFloat(data.netQuantity.trim());
+    if (isNaN(num) || num <= 0) {
+      return { isValid: false, errorMsg: 'Net Quantity must be a valid positive number.' };
+    }
+  }
+
+  if (!data.mrp.trim()) {
+    return { isValid: false, errorMsg: 'MRP is required.' };
+  } else {
+    const cleanMrp = data.mrp.trim().replace(/[^\d.]/g, '');
+    const num = parseFloat(cleanMrp);
+    if (isNaN(num) || num <= 0) {
+      return { isValid: false, errorMsg: 'MRP must be a valid positive number.' };
+    }
+  }
+
+  if (!data.mfgDate.trim()) {
+    return { isValid: false, errorMsg: 'Mfg Date is required.' };
+  } else {
+    const mfg = new Date(data.mfgDate);
+    if (isNaN(mfg.getTime())) {
+      return { isValid: false, errorMsg: 'Mfg Date must be a valid calendar date selection.' };
+    }
+    if (mfg > new Date()) {
+      return { isValid: false, errorMsg: 'Mfg Date cannot be in the future.' };
+    }
+  }
+
+  if (data.expiryDate.trim()) {
+    const exp = new Date(data.expiryDate);
+    const mfg = new Date(data.mfgDate);
+    if (isNaN(exp.getTime())) {
+      return { isValid: false, errorMsg: 'Expiry Date must be a valid calendar date selection.' };
+    }
+    if (!isNaN(mfg.getTime()) && exp < mfg) {
+      return { isValid: false, errorMsg: 'Expiry / Best Before date must be after the Manufacture date.' };
+    }
+  }
+
+  if (data.fssaiLicense.trim()) {
+    const cleanLic = data.fssaiLicense.trim().replace(/\s/g, '');
+    if (!/^\d{14}$/.test(cleanLic)) {
+      return { isValid: false, errorMsg: 'FSSAI License must be exactly 14 digits.' };
+    }
+  }
+
+  return { isValid: true, errorMsg: null };
 }
 
 // Build a full ScannedProduct object

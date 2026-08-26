@@ -141,12 +141,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
             {/* Header bar */}
             <div className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
                 <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl rounded-2xl px-4 py-2 shadow-lg border border-white/10">
-                    <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
                         <ScanLine size={18} />
                     </div>
                     <div>
                         <h1 className="font-bold text-sm text-white leading-tight">Packaging Scanner</h1>
-                        <p className="text-[10px] text-gray-300">Legal Metrology OCR</p>
+                        <p className="text-[10px] text-gray-300">Label Lens OCR</p>
                     </div>
                 </div>
 
@@ -167,8 +167,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                     <div className="bg-gray-900/95 backdrop-blur-xl rounded-3xl p-6 border border-gray-700/60 shadow-2xl">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
-                                <div className="p-3 bg-indigo-500/20 rounded-xl">
-                                    <Video size={24} className="text-indigo-400" />
+                                <div className="p-3 bg-blue-500/20 rounded-xl">
+                                    <Video size={24} className="text-blue-400" />
                                 </div>
                                 <div>
                                     <h2 className="text-white font-bold text-lg">Select Camera</h2>
@@ -190,7 +190,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                                 <div className="flex flex-col gap-2">
                                     <button
                                         onClick={getCameras}
-                                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors text-xs cursor-pointer"
+                                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition-colors text-xs cursor-pointer"
                                     >
                                         Retry Camera Access
                                     </button>
@@ -205,7 +205,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                             </div>
                         ) : isLoading ? (
                             <div className="text-center py-8">
-                                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                                 <p className="text-gray-400 text-xs">Detecting available cameras...</p>
                             </div>
                         ) : (
@@ -216,8 +216,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                                         onClick={() => handleSelectCamera(camera.deviceId)}
                                         className="w-full flex items-center gap-3 p-3.5 bg-gray-800/80 hover:bg-gray-750 rounded-xl transition-all text-left group hover:translate-x-1 cursor-pointer border border-gray-700/40"
                                     >
-                                        <div className="w-9 h-9 bg-gray-700 group-hover:bg-indigo-500/30 rounded-lg flex items-center justify-center transition-colors">
-                                            <Video size={16} className="text-gray-400 group-hover:text-indigo-400" />
+                                        <div className="w-9 h-9 bg-gray-700 group-hover:bg-blue-500/30 rounded-lg flex items-center justify-center transition-colors">
+                                            <Video size={16} className="text-gray-400 group-hover:text-blue-400" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-white font-medium text-xs truncate">{camera.label}</p>
@@ -232,7 +232,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                         <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
                             <button
                                 onClick={handleManualClick}
-                                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 cursor-pointer"
+                                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1.5 cursor-pointer"
                             >
                                 <PenLine size={14} />
                                 Skip & Enter Manually
@@ -254,7 +254,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                             <div className="text-center p-6 bg-gray-900/90 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl">
                                 <AlertCircle className="mx-auto text-rose-500 mb-2" size={32} />
                                 <p className="text-white text-xs">{error}</p>
-                                <button onClick={handleSwitchCamera} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs">
+                                <button onClick={handleSwitchCamera} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs">
                                     Try Another Camera
                                 </button>
                             </div>
@@ -267,10 +267,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                             <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
                                 <div className="relative w-full max-w-md aspect-[3/4] md:aspect-square border-2 border-white/20 rounded-[2rem] overflow-hidden shadow-2xl">
                                     {/* Corners */}
-                                    <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-indigo-500 rounded-tl-[1.8rem] shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-                                    <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-indigo-500 rounded-tr-[1.8rem] shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-                                    <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-indigo-500 rounded-bl-[1.8rem] shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-                                    <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-indigo-500 rounded-br-[1.8rem] shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
+                                    <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-blue-500 rounded-tl-[1.8rem] shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
+                                    <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-blue-500 rounded-tr-[1.8rem] shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
+                                    <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-blue-500 rounded-bl-[1.8rem] shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
+                                    <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-blue-500 rounded-br-[1.8rem] shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
 
                                     {/* Scan Animation */}
                                     <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
@@ -324,7 +324,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                                     className="w-20 h-20 rounded-full border-4 border-white/40 flex items-center justify-center group hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-2xl bg-black/10"
                                     title="Take Photo"
                                 >
-                                    <div className={`w-16 h-16 bg-white rounded-full group-hover:bg-indigo-600 transition-colors flex items-center justify-center ${!isReady ? 'opacity-50' : ''}`}>
+                                    <div className={`w-16 h-16 bg-white rounded-full group-hover:bg-blue-600 transition-colors flex items-center justify-center ${!isReady ? 'opacity-50' : ''}`}>
                                         <Camera size={26} className="text-gray-900 group-hover:text-white transition-colors" />
                                     </div>
                                 </button>
@@ -334,9 +334,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose, on
                             <button
                                 type="button"
                                 onClick={handleManualClick}
-                                className="bg-white/15 hover:bg-indigo-600 hover:border-indigo-500 active:scale-95 text-white text-xs font-semibold px-5 py-2.5 rounded-full border border-white/15 flex items-center gap-2 transition-all cursor-pointer shadow-lg hover:shadow-indigo-600/35"
+                                className="bg-white/15 hover:bg-blue-600 hover:border-blue-500 active:scale-95 text-white text-xs font-semibold px-5 py-2.5 rounded-full border border-white/15 flex items-center gap-2 transition-all cursor-pointer shadow-lg hover:shadow-blue-600/35"
                             >
-                                <PenLine size={14} className="text-indigo-300" />
+                                <PenLine size={14} className="text-blue-300" />
                                 ✍️ Enter Details Manually
                             </button>
                         </div>

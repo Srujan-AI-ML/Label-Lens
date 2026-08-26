@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, AlertTriangle, Printer, Edit2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown } from 'lucide-react';
 
 interface ReportDetailProps {
     product: ScannedProduct;
@@ -41,6 +41,163 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         window.print();
     };
 
+    const handleDownloadPDF = async () => {
+        try {
+            const { jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
+
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            // 1. Header Banner Style (Premium Blue)
+            doc.setFillColor(29, 78, 216); // Royal Blue
+            doc.rect(0, 0, 210, 40, 'F');
+
+            // Logo & Title inside Banner
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(22);
+            doc.setTextColor(255, 255, 255);
+            doc.text('LABEL LENS', 15, 18);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(219, 234, 254);
+            doc.text('COMPLIANCE INSPECTION CERTIFICATE', 15, 25);
+            doc.text(`Certificate ID: ${product.id}`, 15, 30);
+
+            // Compliance Score Badge inside Banner
+            doc.setFillColor(255, 255, 255);
+            doc.roundedRect(160, 8, 35, 24, 3, 3, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(75, 85, 99);
+            doc.text('SCORE', 177, 14, { align: 'center' });
+
+            doc.setFontSize(16);
+            doc.setTextColor(29, 78, 216);
+            doc.text(`${product.complianceScore}%`, 177, 21, { align: 'center' });
+
+            doc.setFontSize(7);
+            doc.setTextColor(107, 114, 128);
+            doc.text(product.complianceStatus.toUpperCase(), 177, 26, { align: 'center' });
+
+            // 2. Product Information Block
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(31, 41, 55);
+            doc.text('Product Information', 15, 52);
+
+            doc.setLineWidth(0.5);
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 54, 195, 54);
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Product Name:', 15, 62);
+            doc.setFont('helvetica', 'normal');
+            doc.text(product.productName, 45, 62);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Barcode GTIN:', 15, 68);
+            doc.setFont('helvetica', 'normal');
+            doc.text(product.barcode || 'N/A', 45, 68);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Category:', 15, 74);
+            doc.setFont('helvetica', 'normal');
+            doc.text(product.category || 'Food & Beverage', 45, 74);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Scan Date:', 15, 80);
+            doc.setFont('helvetica', 'normal');
+            doc.text(new Date(product.scannedAt).toLocaleString(), 45, 80);
+
+            // 3. Declarations Checklist Table
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('Mandatory Declarations Checklist', 15, 92);
+            doc.line(15, 94, 195, 94);
+
+            const decHeaders = [['Declaration Item', 'Status', 'Verified Value / Content Found']];
+            const decRows = [
+                ['Generic Name', product.declarations.genericName?.present ? 'PASS' : 'FAIL', product.declarations.genericName?.value || 'N/A'],
+                ['Net Quantity', product.declarations.netQuantity?.present ? 'PASS' : 'FAIL', product.declarations.netQuantity?.value || 'N/A'],
+                ['MRP Price', product.declarations.mrp?.present ? 'PASS' : 'FAIL', product.declarations.mrp?.value || 'N/A'],
+                ['Mfg Date', product.declarations.manufactureDate?.present ? 'PASS' : 'FAIL', product.declarations.manufactureDate?.value || 'N/A'],
+                ['Expiry Date', product.declarations.bestBefore?.present ? 'PASS' : 'FAIL', product.declarations.bestBefore?.value || 'N/A'],
+                ['Manufacturer', product.declarations.manufacturer?.present ? 'PASS' : 'FAIL', product.declarations.manufacturer?.value || 'N/A'],
+                ['Consumer Care', product.declarations.consumerCare?.present ? 'PASS' : 'FAIL', product.declarations.consumerCare?.value || 'N/A'],
+                ['FSSAI License', product.declarations.fssaiLicense?.present ? 'PASS' : 'FAIL', product.declarations.fssaiLicense?.value || 'N/A'],
+                ['Country of Origin', product.declarations.countryOfOrigin?.present ? 'PASS' : 'FAIL', product.declarations.countryOfOrigin?.value || 'N/A'],
+                ['Unit Retail Price', product.declarations.retailSalePrice?.present ? 'PASS' : 'FAIL', product.declarations.retailSalePrice?.value || 'N/A'],
+            ];
+
+            autoTable(doc, {
+                startY: 98,
+                head: decHeaders,
+                body: decRows,
+                theme: 'grid',
+                headStyles: { fillColor: [29, 78, 216], textColor: [255, 255, 255] },
+                columnStyles: {
+                    0: { cellWidth: 45 },
+                    1: { cellWidth: 20, fontStyle: 'bold' },
+                    2: { cellWidth: 115 }
+                },
+                styles: { fontSize: 8 },
+                didParseCell: (data) => {
+                    if (data.column.index === 1) {
+                        if (data.cell.text[0] === 'PASS') {
+                            data.cell.styles.textColor = [16, 185, 129]; // Green
+                        } else {
+                            data.cell.styles.textColor = [239, 68, 68]; // Red
+                        }
+                    }
+                }
+            });
+
+            // 4. Violations Summary
+            const finalY = (doc as any).lastAutoTable.finalY + 12;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('Compliance Violations & Causes', 15, finalY);
+            doc.line(15, finalY + 2, 195, finalY + 2);
+
+            const violations = product.violations || [];
+            doc.setFontSize(9);
+            if (violations.length === 0) {
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(16, 185, 129);
+                doc.text('Product complies fully with all mandatory declarations guidelines.', 15, finalY + 8);
+            } else {
+                let currentY = finalY + 8;
+                violations.forEach((v, idx) => {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(220, 38, 38);
+                    doc.text(`${idx + 1}. [${v.severity.toUpperCase()}] ${v.label}:`, 15, currentY);
+                    
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(75, 85, 99);
+                    doc.text(v.message, 15, currentY + 4.5);
+                    currentY += 10;
+                });
+            }
+
+            // Footer
+            doc.setFontSize(8);
+            doc.setTextColor(156, 163, 175);
+            doc.text('Label Lens Digital Certification System • Verified Copy', 15, 285);
+
+            doc.save(`Label_Lens_Certificate_${product.productName.replace(/\s+/g, '_')}.pdf`);
+        } catch (err: any) {
+            console.error('Error generating product PDF:', err);
+            alert('Failed to generate PDF: ' + err.message);
+        }
+    };
+
     const declarationLabels: Record<keyof typeof product.declarations, { label: string; desc: string; mandatory: boolean }> = {
         genericName: { label: 'Generic / Common Name', desc: 'Generic description of product', mandatory: true },
         netQuantity: { label: 'Net Quantity', desc: 'Standard weight, volume, or count declaration', mandatory: true },
@@ -66,13 +223,22 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     Return to Dashboard
                 </button>
 
-                <button
-                    onClick={handlePrint}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
-                >
-                    <Printer size={16} />
-                    Print / Export PDF Report
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handlePrint}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer"
+                    >
+                        <Printer size={16} />
+                        Print Certificate
+                    </button>
+                    <button
+                        onClick={handleDownloadPDF}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-855 hover:from-blue-500 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
+                    >
+                        <FileDown size={16} />
+                        Download PDF Certificate
+                    </button>
+                </div>
             </div>
 
             {/* Main Report Container */}
@@ -155,11 +321,11 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                                         type="checkbox"
                                                         checked={item.present}
                                                         readOnly
-                                                        className="w-4 h-4 rounded text-indigo-600 cursor-default"
+                                                        className="w-4 h-4 rounded text-blue-655 cursor-default"
                                                     />
                                                     <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{meta.label}</h4>
                                                     {meta.mandatory && (
-                                                        <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                        <span className="text-[9px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase">
                                                             Mandatory
                                                         </span>
                                                     )}
@@ -224,7 +390,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             <div className="space-y-2">
                                 <textarea
                                     rows={3}
-                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     placeholder="Enter physical inspection details, store location, packer info..."
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
@@ -239,7 +405,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                     <button
                                         onClick={handleSaveNotes}
                                         disabled={isSavingNotes}
-                                        className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer"
+                                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer"
                                     >
                                         {isSavingNotes ? 'Saving...' : 'Save Notes'}
                                     </button>
@@ -252,7 +418,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                 </div>
                                 <button
                                     onClick={() => setIsEditingNotes(true)}
-                                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-850 rounded-lg text-indigo-600 dark:text-indigo-400 cursor-pointer"
+                                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-850 rounded-lg text-blue-600 dark:text-blue-400 cursor-pointer"
                                     title="Edit Notes"
                                 >
                                     <Edit2 size={14} />

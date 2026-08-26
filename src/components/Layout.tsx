@@ -26,7 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     return (
         <div className={`min-h-screen transition-colors duration-300 ${isDarkMode
             ? 'bg-gradient-to-br from-gray-900 via-gray-900 to-gray-950'
-            : 'bg-gradient-to-br from-indigo-50/50 via-white to-violet-50/50'
+            : 'bg-gradient-to-br from-blue-50/50 via-white to-sky-50/50'
             }`}>
             {/* Header */}
             <header className="sticky top-0 z-40 glass-panel border-b border-white/20 dark:border-gray-700/50">

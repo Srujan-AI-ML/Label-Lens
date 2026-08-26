@@ -23,7 +23,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
             {/* Panel */}
             <div className="fixed top-0 right-0 h-full w-full max-w-sm bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto animate-slide-in">
                 {/* Header */}
-                <div className="sticky top-0 bg-gradient-to-r from-indigo-500 to-violet-500 p-5">
+                <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-800 p-5">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-white/20 rounded-xl backdrop-blur">
@@ -51,7 +51,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                         {/* Dark Mode Toggle */}
                         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl">
                             <div className="flex items-center gap-3">
-                                {isDarkMode ? <Moon size={20} className="text-indigo-400" /> : <Sun size={20} className="text-amber-500" />}
+                                {isDarkMode ? <Moon size={20} className="text-blue-400" /> : <Sun size={20} className="text-amber-500" />}
                                 <div>
                                     <p className="font-semibold text-gray-850 dark:text-gray-200">Dark Mode</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -61,7 +61,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                             </div>
                             <button
                                 onClick={toggleDarkMode}
-                                className={`w-12 h-7 rounded-full transition-colors relative cursor-pointer ${isDarkMode ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-650'}`}
+                                className={`w-12 h-7 rounded-full transition-colors relative cursor-pointer ${isDarkMode ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-650'}`}
                             >
                                 <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${isDarkMode ? 'left-6' : 'left-1'}`} />
                             </button>

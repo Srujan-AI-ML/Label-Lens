@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from './CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
-import { analyseCompliance, buildScanResult } from '../services/complianceService';
+import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
 import {
     X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine
 } from 'lucide-react';
@@ -170,22 +170,43 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                     setRawText(text);
                     autoPopulateFromText(text);
                     setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
+
+                    // Determine if any critical fields are missing
+                    const analysis = analyseCompliance(text, productName);
+                    const missingKeys = Object.entries(analysis.declarations)
+                        .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
+                    
+                    if (missingKeys.length > 0) {
+                        alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
+                    }
                 }
             } catch (ocrErr: any) {
                 console.warn('OCR fallback:', ocrErr);
                 setStatusMsg('Image uploaded. Please fill/verify the specifics in the grid below.');
+                alert('⚠️ Specific details failed to scan. Please update manually.');
             }
         } catch (err: any) {
             console.error('Scan processing error:', err);
             setStatusMsg('Image loaded. You can fill/edit the specifics grid directly.');
+            alert('⚠️ Specific details failed to scan. Please update manually.');
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleSave = async (andViewReport: boolean = false) => {
-        if (!productName.trim() && !rawText.trim() && !netQuantity.trim()) {
-            alert('Please provide at least a product name or some packaging declarations.');
+        const validation = validateProductSpecifics({
+            productName,
+            barcode,
+            netQuantity,
+            mrp,
+            mfgDate,
+            expiryDate,
+            fssaiLicense
+        });
+
+        if (!validation.isValid) {
+            alert(`⚠️ Validation Error:\n${validation.errorMsg}`);
             return;
         }
 
@@ -195,7 +216,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             const scanData = buildScanResult(
                 synthesizedText,
                 finalName,
-                barcode || undefined,
+                barcode.trim() || undefined,
                 imagePreview || undefined
             );
             scanData.category = category;
@@ -384,7 +405,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. Parle-G Glucose Biscuits"
                                         value={productName}
                                         onChange={(e) => setProductName(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -399,12 +420,12 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                             placeholder="e.g. 250"
                                             value={netQuantity}
                                             onChange={(e) => setNetQuantity(e.target.value)}
-                                            className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                            className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         />
                                         <select
                                             value={quantityUnit}
                                             onChange={(e) => setQuantityUnit(e.target.value)}
-                                            className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                            className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         >
                                             <option value="g">g</option>
                                             <option value="kg">kg</option>
@@ -426,7 +447,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. 30.00 (incl. of all taxes)"
                                         value={mrp}
                                         onChange={(e) => setMrp(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                     />
                                 </div>
 
@@ -440,7 +461,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. 8901058005080"
                                         value={barcode}
                                         onChange={(e) => setBarcode(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                     />
                                 </div>
 
@@ -450,11 +471,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         <span>📅</span> Month & Year of Mfg / Packing *
                                     </label>
                                     <input
-                                        type="text"
-                                        placeholder="e.g. 05/2026 or May 2026"
+                                        type="date"
                                         value={mfgDate}
                                         onChange={(e) => setMfgDate(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -464,11 +484,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         <span>⌛</span> Best Before / Use By Date
                                     </label>
                                     <input
-                                        type="text"
-                                        placeholder="e.g. 11/2026 (6 months from mfg)"
+                                        type="date"
                                         value={expiryDate}
                                         onChange={(e) => setExpiryDate(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -482,7 +501,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. Britannia Industries Ltd, 5/1A Hungerford Street, Kolkata - 700017, WB"
                                         value={manufacturer}
                                         onChange={(e) => setManufacturer(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -496,7 +515,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. 1800-425-4449 / care@britannia.co.in"
                                         value={consumerCare}
                                         onChange={(e) => setConsumerCare(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -510,7 +529,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. 10015043001129"
                                         value={fssaiLicense}
                                         onChange={(e) => setFssaiLicense(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                     />
                                 </div>
 
@@ -524,7 +543,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. India"
                                         value={countryOfOrigin}
                                         onChange={(e) => setCountryOfOrigin(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -538,7 +557,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         placeholder="e.g. Rs. 0.12 / g"
                                         value={unitPrice}
                                         onChange={(e) => setUnitPrice(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
 
@@ -551,7 +570,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         <select
                                             value={category}
                                             onChange={(e) => setCategory(e.target.value)}
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         >
                                             <option value="Food & Beverage">Food & Beverage</option>
                                             <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
@@ -571,7 +590,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                             placeholder="e.g. Retail store inspection at Sector 4..."
                                             value={notes}
                                             onChange={(e) => setNotes(e.target.value)}
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         />
                                     </div>
                                 </div>
