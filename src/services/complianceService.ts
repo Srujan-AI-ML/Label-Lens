@@ -265,6 +265,49 @@ export function analyseCompliance(
     }
   });
 
+  // Readability & Font Size Compliance Check (Legal Metrology Rules 2011, Rule 13)
+  let qtyValueGrams = 250;
+  if (declarations.netQuantity.present && declarations.netQuantity.value) {
+    const qtyText = declarations.netQuantity.value;
+    const match = qtyText.match(/([\d.,]+)\s*([a-zA-Z]+)/);
+    if (match) {
+      const val = parseFloat(match[1]);
+      const unit = match[2].toLowerCase();
+      if (['kg', 'l', 'lt', 'ltr', 'litre'].includes(unit)) {
+        qtyValueGrams = val * 1000;
+      } else if (['g', 'gm', 'gms', 'ml'].includes(unit)) {
+        qtyValueGrams = val;
+      } else if (['lbs', 'pound', 'lb'].includes(unit)) {
+        qtyValueGrams = val * 453.6;
+      } else if (['oz', 'ounce'].includes(unit)) {
+        qtyValueGrams = val * 28.35;
+      }
+    }
+  }
+
+  let minHeightMm = 1.0;
+  if (qtyValueGrams > 1000) {
+    minHeightMm = 4.0;
+  } else if (qtyValueGrams > 200) {
+    minHeightMm = 2.0;
+  } else if (qtyValueGrams > 50) {
+    minHeightMm = 1.5;
+  }
+
+  const unreadableDeclarations = Object.keys(declarations).filter(key => {
+    const dec = declarations[key as keyof ComplianceDeclarations];
+    return dec.present && dec.confidence === 'low';
+  });
+
+  if (unreadableDeclarations.length > 0) {
+    violations.push({
+      field: 'netQuantity',
+      label: 'Readability / Font Size Check',
+      message: `Font size warning: Under Legal Metrology Rules, package requires minimum numeral/letter height of ${minHeightMm} mm. Small or low-readability text detected for: ${unreadableDeclarations.map(k => k.replace(/([A-Z])/g, ' $1').trim()).join(', ')}.`,
+      severity: 'minor',
+    });
+  }
+
   // Score: critical=12pts each (84 total), major=6pts each (12 total), minor=4pts (4 total) → 100
   const criticalScore = criticalChecks.filter(c => declarations[c.key].present).length * 12;
   const majorScore = majorChecks.filter(c => declarations[c.key].present).length * 6;
