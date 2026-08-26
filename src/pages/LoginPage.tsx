@@ -37,6 +37,14 @@ export const LoginPage: React.FC = () => {
     const [googleLoading, setGoogleLoading] = useState(false);
     const googleButtonRef = useRef<HTMLDivElement>(null);
 
+    // Password strength checks (only enforced on sign-up)
+    const pwChecks = {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        digit: /[0-9]/.test(password),
+    };
+    const pwStrong = pwChecks.length && pwChecks.uppercase && pwChecks.digit;
+
     // Load Google Identity Services script
     useEffect(() => {
         const loadGoogleScript = () => {
@@ -91,8 +99,24 @@ export const LoginPage: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setIsLoading(true);
 
+        // Enforce strong password on registration
+        if (!isLogin) {
+            if (!pwChecks.length) {
+                setError('Password must be at least 8 characters long.');
+                return;
+            }
+            if (!pwChecks.uppercase) {
+                setError('Password must contain at least one uppercase letter (A–Z).');
+                return;
+            }
+            if (!pwChecks.digit) {
+                setError('Password must contain at least one digit (0–9).');
+                return;
+            }
+        }
+
+        setIsLoading(true);
         try {
             if (isLogin) {
                 await login(username, password);
@@ -222,9 +246,9 @@ export const LoginPage: React.FC = () => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors"
-                                    placeholder="Enter your password"
+                                    placeholder={isLogin ? 'Enter your password' : 'Create a strong password'}
                                     required
-                                    minLength={4}
+                                    minLength={isLogin ? 1 : 8}
                                 />
                                 <button
                                     type="button"
@@ -234,6 +258,27 @@ export const LoginPage: React.FC = () => {
                                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                                 </button>
                             </div>
+
+                            {/* Live password strength indicator — only on Sign Up */}
+                            {!isLogin && password.length > 0 && (
+                                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-1.5">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Password requirements:</p>
+                                    {([
+                                        { check: pwChecks.length, label: 'At least 8 characters' },
+                                        { check: pwChecks.uppercase, label: 'At least 1 uppercase letter (A–Z)' },
+                                        { check: pwChecks.digit, label: 'At least 1 digit (0–9)' },
+                                    ] as { check: boolean; label: string }[]).map(({ check, label }) => (
+                                        <div key={label} className={`flex items-center gap-2 text-xs font-medium transition-colors ${
+                                            check ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'
+                                        }`}>
+                                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0 ${
+                                                check ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                                            }`}>{check ? '✓' : '·'}</span>
+                                            {label}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Submit Button */}

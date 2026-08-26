@@ -30,8 +30,14 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Username must be at least 3 characters' });
         }
 
-        if (password.length < 4) {
-            return res.status(400).json({ error: 'Password must be at least 4 characters' });
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+        }
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one uppercase letter (A–Z)' });
+        }
+        if (!/[0-9]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one digit (0–9)' });
         }
 
         let db;
