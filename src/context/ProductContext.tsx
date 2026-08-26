@@ -20,7 +20,22 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
     const [products, setProducts] = useState<ScannedProduct[]>(() => {
         const cached = localStorage.getItem('lm-scanned-products');
         if (cached) {
-            try { return JSON.parse(cached); } catch { }
+            try { 
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) {
+                    return parsed.map(p => {
+                        let status = p.complianceStatus;
+                        if (p.complianceScore === 100) {
+                            status = 'Compliant';
+                        } else if (p.complianceScore === 0) {
+                            status = 'Non-Compliant';
+                        } else {
+                            status = 'Partially Compliant';
+                        }
+                        return { ...p, complianceStatus: status };
+                    });
+                }
+            } catch { }
         }
         return [];
     });
@@ -73,7 +88,18 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         try {
             const data = await productsAPI.getAll();
             if (Array.isArray(data)) {
-                setProducts(data);
+                const mapped = data.map(p => {
+                    let status = p.complianceStatus;
+                    if (p.complianceScore === 100) {
+                        status = 'Compliant';
+                    } else if (p.complianceScore === 0) {
+                        status = 'Non-Compliant';
+                    } else {
+                        status = 'Partially Compliant';
+                    }
+                    return { ...p, complianceStatus: status };
+                });
+                setProducts(mapped);
             }
         } catch (error) {
             console.error('Background fetch products warning:', error);
