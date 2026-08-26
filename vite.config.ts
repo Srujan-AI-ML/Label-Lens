@@ -122,6 +122,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), apiMiddlewarePlugin],
     server: {
+      port: 5173,
+      strictPort: true,
       proxy: {
         // Proxy UPCitemdb API to avoid CORS issues
         '/api/upcitemdb': {
