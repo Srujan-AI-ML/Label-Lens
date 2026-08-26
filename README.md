@@ -164,7 +164,7 @@ Open `http://localhost:5173` in your browser.
 | **Name** | Srujan |
 | **GitHub** | [Srujan-AI-ML](https://github.com/Srujan-AI-ML) |
 | **Repository** | [Smart-Bite](https://github.com/Srujan-AI-ML/Smart-Bite) |
-| **Email** | *(to be updated)* |
+| **Email** | asgaladechronicles@gmail.com |
 
 ---
 
