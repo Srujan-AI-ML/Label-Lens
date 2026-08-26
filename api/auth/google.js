@@ -89,9 +89,21 @@ export default async function handler(req, res) {
             }
             console.log('Existing user logged in:', user.username || user.email);
         } else {
+            // Generate a unique username to avoid duplicate key violations
+            let baseUsername = name.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/\s+/g, '_');
+            if (baseUsername.length < 3) {
+                baseUsername = 'user_' + Math.random().toString(36).substring(2, 7);
+            }
+            let uniqueUsername = baseUsername;
+            let counter = 1;
+            while (await usersCollection.findOne({ username: uniqueUsername })) {
+                uniqueUsername = `${baseUsername}_${counter}`;
+                counter++;
+            }
+
             // Create new user
             const newUser = {
-                username: name.toLowerCase().replace(/\s+/g, '_'),
+                username: uniqueUsername,
                 email: email.toLowerCase(),
                 googleId,
                 picture,
