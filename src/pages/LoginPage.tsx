@@ -185,7 +185,9 @@ export const LoginPage: React.FC = () => {
                             {googleLoading && (
                                 <div className="flex justify-center mt-3">
                                     <Loader size={20} className="animate-spin text-blue-500" />
-                                    <span className="ml-2 text-sm text-gray-500">Signing in with Google...</span>
+                                    <span className="ml-2 text-sm text-gray-500">
+                                        {isLogin ? 'Signing in with Google...' : 'Signing up with Google...'}
+                                    </span>
                                 </div>
                             )}
                         </div>
