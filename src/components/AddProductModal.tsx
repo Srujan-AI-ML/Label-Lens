@@ -101,20 +101,22 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             return cleanStr;
         }
 
-        // 2. If it's DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
-        const dmyMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{4})$/);
+        // 2. If it's DD.MM.YY(YY) or DD/MM/YY(YY) or DD-MM-YY(YY)
+        const dmyMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})$/);
         if (dmyMatch) {
             const day = dmyMatch[1].padStart(2, '0');
             const month = dmyMatch[2].padStart(2, '0');
-            const year = dmyMatch[3];
+            let year = dmyMatch[3];
+            if (year.length === 2) year = '20' + year;
             return `${year}-${month}-${day}`;
         }
 
-        // 3. If it's MM/YYYY or MM.YYYY or MM-YYYY
-        const myMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{4})$/);
+        // 3. If it's MM/YY(YY) or MM.YY(YY) or MM-YY(YY)
+        const myMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{2,4})$/);
         if (myMatch) {
             const month = myMatch[1].padStart(2, '0');
-            const year = myMatch[2];
+            let year = myMatch[2];
+            if (year.length === 2) year = '20' + year;
             return `${year}-${month}-01`;
         }
 
