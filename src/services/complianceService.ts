@@ -112,12 +112,12 @@ function extractNetQuantity(text: string): ComplianceDeclaration {
 
 function extractManufactureDate(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:mfg(?:\.|\s*date)?|mfd(?:\.|\s*date)?|manufacture\s*date|date\s*of\s*mfg|date\s*of\s*manufacture|date\s*of\s*packing|packing\s*date|packed\s*on|pkd|packed|dom)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,20})/i,
+    /(?:mfg(?:\.|\s*date)?|mfd(?:\.|\s*date)?|manufacture\s*date|date\s*of\s*mfg|date\s*of\s*manufacture|date\s*of\s*packing|packing\s*date|packed\s*on|pkd|packed|dom)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
     /\b(?:mfg|mfd|pkd)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i
   ];
   const value = firstMatch(text, patterns);
   if (value) {
-    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i);
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}))/i);
     if (dateMatch) {
       return makeDeclaration(true, dateMatch[0].trim(), 'high');
     }
@@ -134,7 +134,7 @@ function extractBestBefore(text: string): ComplianceDeclaration {
   ];
   const value = firstMatch(text, patterns);
   if (value) {
-    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}|\d+\s*months?)/i);
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})|\d+\s*months?)/i);
     if (dateMatch) {
       return makeDeclaration(true, dateMatch[0].trim(), 'high');
     }
@@ -160,21 +160,32 @@ function extractMRP(text: string): ComplianceDeclaration {
 function extractConsumerCare(text: string): ComplianceDeclaration {
   const careSectionPattern = /(?:consumer\s*care|helpline|customer\s*care|feedback|complaint|customer\s*support)[^\n\r]*[\r\n]?[^\n\r]*/i;
   const section = text.match(careSectionPattern);
-  const targetText = section ? section[0] : text;
 
-  const phonePattern = /(?:toll\s*free\s*[:\-]?\s*)?(?:1800[-\s]?\d{2,3}[-\s]?\d{4,5}|1800\d{6,7}|(?:\+91[-\s]?)?[6-9]\d{9}|\d{3,4}[-\s]\d{7,8})/;
+  const phonePattern = /(?:toll\s*free\s*[:\-]?\s*)?(?:1800[-\s]?\d{2,3}[-\s]?\d{4,5}|1800\d{6,7}|(?<!\d)(?:\+91[-\s]?)?[6-9]\d{9}(?!\d)|\d{3,4}[-\s]\d{7,8})/;
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 
-  const phoneMatch = targetText.match(phonePattern) || text.match(phonePattern);
-  const emailMatch = targetText.match(emailPattern) || text.match(emailPattern);
+  if (section) {
+    const phoneMatch = section[0].match(phonePattern);
+    const emailMatch = section[0].match(emailPattern);
+    if (phoneMatch || emailMatch) {
+      const parts = [
+        phoneMatch ? phoneMatch[0].trim() : null,
+        emailMatch ? emailMatch[0].trim() : null
+      ].filter(Boolean);
+      return makeDeclaration(true, parts.join(' / '), 'high');
+    }
+  }
 
-  if (phoneMatch || emailMatch) {
+  const emailMatch = text.match(emailPattern);
+  const tollFreeMatch = text.match(/(?:1800[-\s]?\d{2,3}[-\s]?\d{4,5}|1800\d{6,7})/);
+  if (emailMatch || tollFreeMatch) {
     const parts = [
-      phoneMatch ? phoneMatch[0].trim() : null,
+      tollFreeMatch ? tollFreeMatch[0].trim() : null,
       emailMatch ? emailMatch[0].trim() : null
     ].filter(Boolean);
     return makeDeclaration(true, parts.join(' / '), 'high');
   }
+
   return makeDeclaration(false, null, 'low');
 }
 
