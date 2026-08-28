@@ -160,7 +160,7 @@ export async function extractTextUsingTesseract(base64Image: string): Promise<st
     return text;
 }
 
-// Call Secure Backend OCR Serverless Proxy or fall back to client-side Google Vision/Tesseract OCR
+// Call Server-Side Google Cloud Vision API Proxy or Direct Client Vision Fallback
 export async function extractTextFromImage(base64Image: string): Promise<string> {
     try {
         const token = localStorage.getItem('labellens-token');
@@ -175,48 +175,37 @@ export async function extractTextFromImage(base64Image: string): Promise<string>
 
         const data = await response.json();
 
-        if (!response.ok) {
-            console.error('Vision proxy HTTP error:', response.status, JSON.stringify(data, null, 2));
-            throw new Error(`Vision proxy error (${response.status}): ${data.error || JSON.stringify(data)}`);
+        if (!response.ok || data.error) {
+            console.error('Vision API error:', response.status, JSON.stringify(data, null, 2));
+            if (hasClientVisionCredentials()) {
+                console.log('Attempting direct client-side Google Vision fallback...');
+                const text = await extractTextGoogleVisionFallback(base64Image);
+                if (text && text.trim()) return text;
+            }
+            throw new Error(data.error || data.details || `Google Vision OCR failed (${response.status})`);
         }
 
-        // If backend proxy fell back to mock because of missing server env variables, check client-side fallbacks
         if (data.isMock) {
             if (hasClientVisionCredentials()) {
-                console.log('Backend returned mock data. Falling back to direct client-side Google Vision call.');
-                try {
-                    const text = await extractTextGoogleVisionFallback(base64Image);
-                    if (text && text.trim()) return text;
-                } catch (clientErr) {
-                    console.error('Direct client-side Vision fallback failed:', clientErr);
-                }
+                const text = await extractTextGoogleVisionFallback(base64Image);
+                if (text && text.trim()) return text;
             }
-            
-            // Perform local OCR using Tesseract.js
-            return await extractTextUsingTesseract(base64Image);
+            throw new Error('Google Cloud Vision API credentials are not configured on the server. Please set GOOGLE_CLOUD_CLIENT_EMAIL and GOOGLE_CLOUD_PRIVATE_KEY.');
         }
 
-        console.log('Raw Backend Google Vision OCR Output:\n', data.text);
+        console.log('✅ Google Cloud Vision API OCR Output:\n', data.text);
         return data.text || '';
-    } catch (err) {
-        console.warn('Vision API call failed, falling back to client credentials or local Tesseract OCR:', err);
+    } catch (err: any) {
+        console.error('Google Vision OCR extraction failed:', err);
         if (hasClientVisionCredentials()) {
             try {
-                console.log('Attempting direct client-side Google Vision fallback after fetch error...');
                 const text = await extractTextGoogleVisionFallback(base64Image);
                 if (text && text.trim()) return text;
             } catch (clientErr) {
-                console.error('Direct client-side Vision fallback failed after fetch error:', clientErr);
+                console.error('Direct client Vision fallback failed:', clientErr);
             }
         }
-        
-        // Final fallback to local Tesseract.js OCR
-        try {
-            return await extractTextUsingTesseract(base64Image);
-        } catch (tessErr) {
-            console.error('Local Tesseract OCR fallback failed:', tessErr);
-            throw new Error('OCR extraction failed: both remote API and local Tesseract failed.');
-        }
+        throw new Error(err.message || 'Google Cloud Vision API failed to scan image.');
     }
 }
 

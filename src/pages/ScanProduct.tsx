@@ -110,10 +110,22 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         return parts.join('\n');
     }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
 
-    // Live analysis on current synthesized text
+    // Live analysis on current synthesized text & form state
     const liveAnalysis = useMemo(() => {
-        return analyseCompliance(synthesizedText, productName || 'Inspected Product');
-    }, [synthesizedText, productName]);
+        return analyseCompliance(rawText || synthesizedText, {
+            productName,
+            manufacturer,
+            netQuantity,
+            quantityUnit,
+            mrp,
+            manufactureDate: mfgDate,
+            expiryDate,
+            consumerCare,
+            fssaiLicense,
+            countryOfOrigin,
+            unitPrice
+        });
+    }, [rawText, synthesizedText, productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
 
     const handleCameraCapture = async (imageSrc: string) => {
         setShowCamera(false);

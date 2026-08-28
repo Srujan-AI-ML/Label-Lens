@@ -331,9 +331,23 @@ function extractRetailSalePrice(text: string): ComplianceDeclaration {
 
 // ---- Main Compliance Analyser -------------------------------
 
+export interface FormSpecificsOverride {
+  productName?: string;
+  netQuantity?: string;
+  quantityUnit?: string;
+  mrp?: string;
+  manufactureDate?: string;
+  expiryDate?: string;
+  manufacturer?: string;
+  consumerCare?: string;
+  fssaiLicense?: string;
+  countryOfOrigin?: string;
+  unitPrice?: string;
+}
+
 export function analyseCompliance(
   rawText: string,
-  productName?: string
+  productNameOrOverrides?: string | FormSpecificsOverride
 ): {
   declarations: ComplianceDeclarations;
   violations: Violation[];
@@ -341,6 +355,9 @@ export function analyseCompliance(
   complianceStatus: ComplianceStatus;
 } {
   const text = normalizeOCRText(rawText);
+
+  let productName = typeof productNameOrOverrides === 'string' ? productNameOrOverrides : productNameOrOverrides?.productName;
+  let formValues: FormSpecificsOverride | undefined = typeof productNameOrOverrides === 'object' ? productNameOrOverrides : undefined;
 
   const declarations: ComplianceDeclarations = {
     genericName: extractGenericName(text),
@@ -355,7 +372,43 @@ export function analyseCompliance(
     retailSalePrice: extractRetailSalePrice(text),
   };
 
-  if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim() && productName !== 'Could not identify product') {
+  // Form value overrides: If user entered or scanned valid form values, update declaration state
+  if (formValues) {
+    if (formValues.productName && formValues.productName.trim() && formValues.productName !== 'Could not identify product') {
+      declarations.genericName = makeDeclaration(true, formValues.productName.trim(), 'high');
+    }
+    if (formValues.mrp && formValues.mrp.trim() !== '') {
+      const cleanNum = formValues.mrp.replace(/[^\d.,]/g, '');
+      if (cleanNum && !isNaN(parseFloat(cleanNum)) && parseFloat(cleanNum) > 0) {
+        declarations.mrp = makeDeclaration(true, `₹${cleanNum}`, 'high');
+      }
+    }
+    if (formValues.netQuantity && formValues.netQuantity.trim() !== '') {
+      const val = `${formValues.netQuantity.trim()} ${formValues.quantityUnit || ''}`.trim();
+      declarations.netQuantity = makeDeclaration(true, val, 'high');
+    }
+    if (formValues.manufactureDate && formValues.manufactureDate.trim() !== '') {
+      declarations.manufactureDate = makeDeclaration(true, formValues.manufactureDate.trim(), 'high');
+    }
+    if (formValues.expiryDate && formValues.expiryDate.trim() !== '') {
+      declarations.bestBefore = makeDeclaration(true, formValues.expiryDate.trim(), 'high');
+    }
+    if (formValues.manufacturer && formValues.manufacturer.trim() !== '') {
+      declarations.manufacturer = makeDeclaration(true, formValues.manufacturer.trim(), 'high');
+    }
+    if (formValues.consumerCare && formValues.consumerCare.trim() !== '') {
+      declarations.consumerCare = makeDeclaration(true, formValues.consumerCare.trim(), 'high');
+    }
+    if (formValues.fssaiLicense && formValues.fssaiLicense.trim() !== '') {
+      declarations.fssaiLicense = makeDeclaration(true, formValues.fssaiLicense.trim(), 'high');
+    }
+    if (formValues.countryOfOrigin && formValues.countryOfOrigin.trim() !== '') {
+      declarations.countryOfOrigin = makeDeclaration(true, formValues.countryOfOrigin.trim(), 'high');
+    }
+    if (formValues.unitPrice && formValues.unitPrice.trim() !== '') {
+      declarations.retailSalePrice = makeDeclaration(true, formValues.unitPrice.trim(), 'high');
+    }
+  } else if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim() && productName !== 'Could not identify product') {
     declarations.genericName = makeDeclaration(true, productName.trim(), 'high');
   }
 

@@ -91,9 +91,14 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Image base64 content is required' });
         }
 
+        const isPlaceholder = !SERVICE_ACCOUNT.client_email || 
+            SERVICE_ACCOUNT.client_email.includes('your-service-account') || 
+            !SERVICE_ACCOUNT.private_key || 
+            SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY_HERE');
+
         if (isPlaceholder) {
-            console.log('Google Cloud Vision credentials not set in production backend. Returning empty text for client local OCR fallback.');
-            return res.status(200).json({ text: '', isMock: true });
+            console.log('Google Cloud Vision credentials are not set in production backend.');
+            return res.status(200).json({ text: '', isMock: true, error: 'Google Cloud Vision API credentials are not configured on the server side.' });
         }
 
         const accessToken = await getAccessToken();
@@ -107,7 +112,10 @@ export default async function handler(req, res) {
             body: JSON.stringify({
                 requests: [{
                     image: { content: image },
-                    features: [{ type: 'TEXT_DETECTION' }]
+                    features: [
+                        { type: 'DOCUMENT_TEXT_DETECTION' },
+                        { type: 'TEXT_DETECTION' }
+                    ]
                 }]
             })
         });
@@ -119,8 +127,8 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Google Vision API failed', details: data.error });
         }
 
-        const annotations = data.responses?.[0]?.textAnnotations;
-        const extractedText = annotations?.[0]?.description || '';
+        const responses = data.responses?.[0];
+        const extractedText = responses?.fullTextAnnotation?.text || responses?.textAnnotations?.[0]?.description || '';
 
         return res.status(200).json({ text: extractedText });
 
