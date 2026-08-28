@@ -16,7 +16,7 @@ Label Lens is built on a modern full-stack architecture featuring a **Serverless
 graph TD
     A[Client UI - React + Vite] -->|HTTPS Requests| B[Serverless Endpoints - Vercel Node.js]
     B -->|Mongoose / Native Driver| C[(MongoDB Atlas Database)]
-    A -->|Direct API Call| D[Google Cloud Vision OCR]
+    B -->|Secure API Query| D[Google Cloud Vision OCR]
     A -->|Barcode Detection API| E[Local Browser SDK / Fallback]
 ```
 
@@ -64,6 +64,12 @@ graph TD
 *   **Solution:** A custom string normalization pipeline evaluates the text through regular expressions:
     *   *3-part Dates:* `DD.MM.YY(YY)` -> Normalizes short years by appending `20` prefix to the 2-digit year (e.g. `15` becomes `2015`) and returns `YYYY-MM-DD`.
     *   *2-part Dates:* `MM/YY(YY)` -> Extracts month and year, defaults day to `01`, converts 2-digit years, and outputs `YYYY-MM-01`.
+
+### 4. Secure Serverless Google Cloud Vision OCR Proxy
+*   **Source Files:** [`api/vision/ocr.js`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/api/vision/ocr.js) & [`src/services/visionService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/visionService.ts)
+*   **Challenge:** Initiating JWT signing and communicating directly with the Google Cloud Vision API from the React frontend requires bundling Google Cloud Service Account Private Keys (`private_key`) inside the client-side browser files. This poses an extreme security vulnerability because anyone inspect-debugging the page can steal the credentials and billing quota.
+*   **Solution:** Removed all client-side private key exposures and `jose` dependencies. The React client now transmits only the raw base64 image data to the secure `/api/vision/ocr` backend endpoint. The backend handles the JWT generation, signs it via `jsonwebtoken` on the server using hidden environment variables, exchanges it for Google API tokens, queries the Vision OCR API securely, and passes the extracted text back.
+*   **Access Control:** The backend proxy is protected by JWT verification middleware (`authenticateRequest(req)`). Only signed-in inspection users are authorized to execute OCR, protecting Google Cloud quotas against external scrapers or billing attacks.
 
 ---
 

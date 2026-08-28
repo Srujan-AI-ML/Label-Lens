@@ -1,89 +1,5 @@
-import * as jose from 'jose';
-
-// Service Account Credentials - Read from environment variables
-function parsePrivateKey(raw: string): string {
-    if (!raw) return '';
-    // Remove surrounding quotes if present
-    let key = raw.replace(/^["']|["']$/g, '');
-    // Replace all forms of escaped newlines with actual newlines
-    key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
-    return key;
-}
-
-const SERVICE_ACCOUNT = {
-    client_email: import.meta.env.VITE_GOOGLE_CLOUD_CLIENT_EMAIL || '',
-    private_key: parsePrivateKey(import.meta.env.VITE_GOOGLE_CLOUD_PRIVATE_KEY || ''),
-    token_uri: "https://oauth2.googleapis.com/token"
-};
-
-// Check if Google Cloud Vision credentials are configured
-const hasVisionCredentials = (): boolean => {
-    return !!(SERVICE_ACCOUNT.client_email && SERVICE_ACCOUNT.private_key);
-};
-
-let cachedToken: { token: string; expiry: number } | null = null;
-
-// Get access token using service account JWT
-async function getAccessToken(): Promise<string> {
-    if (!hasVisionCredentials()) {
-        throw new Error('Google Cloud Vision credentials are not configured.');
-    }
-
-    // Return cached token if still valid
-    if (cachedToken && Date.now() < cachedToken.expiry - 60000) {
-        return cachedToken.token;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-        iss: SERVICE_ACCOUNT.client_email,
-        sub: SERVICE_ACCOUNT.client_email,
-        aud: SERVICE_ACCOUNT.token_uri,
-        iat: now,
-        exp: now + 3600,
-        scope: "https://www.googleapis.com/auth/cloud-vision"
-    };
-
-    // Import the private key
-    const privateKey = await jose.importPKCS8(SERVICE_ACCOUNT.private_key, 'RS256');
-
-    // Create signed JWT
-    const jwt = await new jose.SignJWT(payload)
-        .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-        .sign(privateKey);
-
-    // Exchange JWT for access token
-    const tokenResponse = await fetch(SERVICE_ACCOUNT.token_uri, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion: jwt
-        })
-    });
-
-    const tokenData = await tokenResponse.json();
-
-    if (tokenData.error) {
-        throw new Error(`Token error: ${tokenData.error_description || tokenData.error}`);
-    }
-
-    cachedToken = {
-        token: tokenData.access_token,
-        expiry: Date.now() + (tokenData.expires_in * 1000)
-    };
-
-    return cachedToken.token;
-}
-
-// Call Cloud Vision API for text detection
+// Call Secure Backend OCR Serverless Proxy
 export async function extractTextFromImage(base64Image: string): Promise<string> {
-    const isPlaceholder = 
-        !SERVICE_ACCOUNT.client_email || 
-        !SERVICE_ACCOUNT.private_key ||
-        SERVICE_ACCOUNT.client_email.includes('your-service-account') ||
-        SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY');
-
     const MOCK_LABEL_TEXT = `PRODUCT: Premium Butter Cookies
 BARCODE: 8901058005080
 MANUFACTURED BY: Britannia Industries Ltd, 5/1A Hungerford Street, Kolkata - 700017
@@ -96,45 +12,25 @@ FSSAI LIC NO: 10015031001425
 COUNTRY OF ORIGIN: India
 UNIT SALE PRICE: Rs. 0.60 / g`;
 
-    if (isPlaceholder) {
-        console.warn('Google Cloud Vision credentials are placeholders. Returning mock label text.');
-        return MOCK_LABEL_TEXT;
-    }
-
     try {
-        const accessToken = await getAccessToken();
-
-        const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+        const token = localStorage.getItem('labellens-token');
+        const response = await fetch('/api/vision/ocr', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: JSON.stringify({
-                requests: [{
-                    image: { content: base64Image },
-                    features: [{ type: 'TEXT_DETECTION' }]
-                }]
-            })
+            body: JSON.stringify({ image: base64Image })
         });
 
         const data = await response.json();
 
         if (!response.ok) {
-            console.error('Vision API HTTP error:', response.status, JSON.stringify(data, null, 2));
-            throw new Error(`Vision API error (${response.status}): ${data.error?.message || JSON.stringify(data)}`);
+            console.error('Vision proxy HTTP error:', response.status, JSON.stringify(data, null, 2));
+            throw new Error(`Vision proxy error (${response.status}): ${data.error || JSON.stringify(data)}`);
         }
 
-        if (data.error) {
-            console.error('Vision API data error:', JSON.stringify(data.error, null, 2));
-            throw new Error(`Vision API error: ${data.error.message}`);
-        }
-
-        // Get full text from response
-        const fullText = data.responses?.[0]?.fullTextAnnotation?.text ||
-            data.responses?.[0]?.textAnnotations?.[0]?.description || '';
-
-        return fullText || MOCK_LABEL_TEXT;
+        return data.text || MOCK_LABEL_TEXT;
     } catch (err) {
         console.warn('Vision API call failed, falling back to mock label text:', err);
         return MOCK_LABEL_TEXT;
