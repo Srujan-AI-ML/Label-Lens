@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from '../components/CameraModal';
-import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
+import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
 import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
 import { 
     Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
@@ -152,54 +152,56 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         const decs = analysis.declarations;
 
         if (decs.genericName?.present && decs.genericName.value) {
-            setProductName(decs.genericName.value);
+            const val = decs.genericName.value;
+            setProductName(prev => prev || val);
         } else if (currentName) {
-            setProductName(currentName);
-        } else {
-            setProductName('Could not identify product');
+            setProductName(prev => prev || currentName);
         }
         if (decs.netQuantity?.present && decs.netQuantity.value) {
             const qtyMatch = decs.netQuantity.value.match(/([\d.,]+)\s*([a-zA-Z]+)/);
             if (qtyMatch) {
-                setNetQuantity(qtyMatch[1]);
+                setNetQuantity(prev => prev || qtyMatch[1]);
                 const unit = qtyMatch[2].toLowerCase();
                 if (['g', 'kg', 'ml', 'l', 'pcs', 'units'].includes(unit)) {
                     setQuantityUnit(unit === 'l' ? 'L' : unit);
                 }
             } else {
-                setNetQuantity(decs.netQuantity.value);
+                const val = decs.netQuantity.value;
+                setNetQuantity(prev => prev || val);
             }
         }
         if (decs.mrp?.present && decs.mrp.value) {
             const cleanMrp = decs.mrp.value.replace(/[₹\s,]/g, '');
-            setMrp(cleanMrp);
+            setMrp(prev => prev || cleanMrp);
         }
         if (decs.manufactureDate?.present && decs.manufactureDate.value) {
-            setMfgDate(formatToISODate(decs.manufactureDate.value));
+            const val = formatToISODate(decs.manufactureDate.value) || decs.manufactureDate.value;
+            setMfgDate(prev => prev || val);
         }
         if (decs.bestBefore?.present && decs.bestBefore.value) {
-            setExpiryDate(formatToISODate(decs.bestBefore.value));
+            const val = formatToISODate(decs.bestBefore.value) || decs.bestBefore.value;
+            setExpiryDate(prev => prev || val);
         }
         if (decs.manufacturer?.present && decs.manufacturer.value) {
-            setManufacturer(decs.manufacturer.value);
+            const val = decs.manufacturer.value;
+            setManufacturer(prev => prev || val);
         }
         if (decs.consumerCare?.present && decs.consumerCare.value) {
-            setConsumerCare(decs.consumerCare.value);
+            const val = decs.consumerCare.value;
+            setConsumerCare(prev => prev || val);
         }
         if (decs.fssaiLicense?.present && decs.fssaiLicense.value) {
             const fssaiMatch = decs.fssaiLicense.value.match(/\d{14}/);
-            if (fssaiMatch) {
-                setFssaiLicense(fssaiMatch[0]);
-            } else {
-                setFssaiLicense(decs.fssaiLicense.value);
-            }
+            const val = fssaiMatch ? fssaiMatch[0] : decs.fssaiLicense.value;
+            setFssaiLicense(prev => prev || val);
         }
         if (decs.countryOfOrigin?.present && decs.countryOfOrigin.value) {
             const cleanOrigin = decs.countryOfOrigin.value.replace(/\(inferred\)/i, '').trim();
-            setCountryOfOrigin(cleanOrigin);
+            setCountryOfOrigin(prev => prev || cleanOrigin);
         }
         if (decs.retailSalePrice?.present && decs.retailSalePrice.value) {
-            setUnitPrice(decs.retailSalePrice.value);
+            const val = decs.retailSalePrice.value;
+            setUnitPrice(prev => prev || val);
         }
 
         // Fallback barcode detection from extracted text
@@ -207,12 +209,12 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             const barcodeRegex = /(?:barcode|gtin|upc|ean)\s*[:\-]?\s*(\d{8,15})/i;
             const match = extractedText.match(barcodeRegex);
             if (match) {
-                setBarcode(match[1].trim());
+                setBarcode(prev => prev || match[1].trim());
             } else {
                 const cleanText = extractedText.replace(/\s+/g, '');
                 const standaloneMatch = cleanText.match(/(\d{8,15})/);
                 if (standaloneMatch) {
-                    setBarcode(standaloneMatch[1]);
+                    setBarcode(prev => prev || standaloneMatch[1]);
                 }
             }
         }
@@ -235,64 +237,111 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setRawText('');
 
         setIsScanning(true);
-        setScanStatus('Analyzing image and reading packaging declarations...');
-        const base64Data = imageSrc.split(',')[1];
+        setScanStatus('Analyzing image and reading packaging declarations via Google Gemini...');
+        const base64Data = imageSrc.split(',')[1] || imageSrc;
 
         let detectedBarcode = '';
         let detectedName = '';
 
         try {
             // Step 1: Detect Barcode
-            const bcode = await detectBarcode(base64Data);
-            if (bcode) {
-                detectedBarcode = bcode;
-                setBarcode(bcode);
-                setScanStatus(`Barcode detected: ${bcode}. Checking product registry...`);
-                const info = await lookupProduct(bcode);
-                if (info && info.name) {
-                    detectedName = info.name;
-                    setProductName(info.name);
+            try {
+                const bcode = await detectBarcode(base64Data);
+                if (bcode) {
+                    detectedBarcode = bcode;
+                    setBarcode(bcode);
+                    setScanStatus(`Barcode detected: ${bcode}. Checking product registry...`);
+                    const info = await lookupProduct(bcode);
+                    if (info && info.name) {
+                        detectedName = info.name;
+                        setProductName(info.name);
+                    }
                 }
+            } catch (barcodeErr) {
+                console.warn('Barcode lookup notice:', barcodeErr);
             }
 
-            // Step 2: OCR Text Extraction
-            setScanStatus('Running Optical Character Recognition (OCR)...');
-            try {
-                const text = await extractTextFromImage(base64Data);
-                console.log('Raw OCR Output from Scan:', text);
-                
-                if (text && text.trim()) {
-                    setRawText(text);
-                    autoPopulateFromText(text, detectedName, detectedBarcode);
-                    setScanStatus('✅ Text extracted successfully! Review specifics in grid below.');
+            // Step 2: Google Gemini AI Multimodal Vision Analysis
+            setScanStatus('Running Google Gemini AI Multimodal Vision Analysis...');
+            const scanResult = await scanProductImageWithGemini(imageSrc);
+            const { text, product } = scanResult;
 
-                    const analysis = analyseCompliance(text, detectedName);
-                    const decs = analysis.declarations;
-                    const finalName = (decs.genericName?.present && decs.genericName.value) || detectedName;
-                    
-                    if (finalName && finalName.trim()) {
-                        setProductName(finalName);
-                    }
-                } else {
-                    console.log('No text was returned by OCR.');
-                    if (detectedName) {
-                        setProductName(detectedName);
-                    }
-                    setScanStatus('⚠️ Image attached. Review and edit details in grid below.');
-                }
-            } catch (ocrError: any) {
-                console.warn('OCR notice:', ocrError);
-                if (detectedName) {
+            if (text) {
+                setRawText(text);
+            }
+
+            // Step 3: Populate designated form fields from structured Gemini output
+            if (product) {
+                if (product.productName) {
+                    setProductName(product.productName);
+                } else if (detectedName) {
                     setProductName(detectedName);
                 }
-                setScanStatus('Image attached. Please review/fill the specifics in the grid below.');
+
+                if (product.netQuantity) {
+                    setNetQuantity(product.netQuantity);
+                }
+                if (product.quantityUnit) {
+                    const u = product.quantityUnit.toLowerCase();
+                    if (['g', 'kg', 'ml', 'l', 'pcs', 'units'].includes(u)) {
+                        setQuantityUnit(u === 'l' ? 'L' : u);
+                    } else {
+                        setQuantityUnit(product.quantityUnit);
+                    }
+                }
+                if (product.mrp) {
+                    const cleanMrp = String(product.mrp).replace(/[₹\s,]/g, '');
+                    setMrp(cleanMrp);
+                }
+                if (product.manufacturingDate) {
+                    const formatted = formatToISODate(product.manufacturingDate);
+                    setMfgDate(formatted || product.manufacturingDate);
+                }
+                if (product.expiryDate) {
+                    const formatted = formatToISODate(product.expiryDate);
+                    setExpiryDate(formatted || product.expiryDate);
+                }
+
+                const mfgFull = [product.manufacturerName, product.manufacturerAddress].filter(Boolean).join(', ');
+                if (mfgFull) {
+                    setManufacturer(mfgFull);
+                }
+
+                if (product.consumerCare) {
+                    setConsumerCare(product.consumerCare);
+                }
+                if (product.fssaiLicense) {
+                    const fMatch = String(product.fssaiLicense).match(/\d{14}/);
+                    setFssaiLicense(fMatch ? fMatch[0] : String(product.fssaiLicense));
+                }
+                if (product.countryOfOrigin) {
+                    setCountryOfOrigin(product.countryOfOrigin);
+                }
+                if (product.unitSalePrice) {
+                    setUnitPrice(product.unitSalePrice);
+                }
+                if (product.barcode) {
+                    setBarcode(product.barcode);
+                } else if (detectedBarcode) {
+                    setBarcode(detectedBarcode);
+                }
             }
+
+            // Step 4: Run auto-populate fallback on raw text to capture any unfilled fields
+            if (text && text.trim()) {
+                autoPopulateFromText(text, detectedName, detectedBarcode);
+            }
+
+            setScanStatus('✅ Packaging declarations extracted successfully! Review and edit fields below.');
+            console.log('--- [PIPELINE] FORM STATE UPDATED ---');
+            console.log('--- [PIPELINE] SCAN COMPLETE ---');
+
         } catch (err: any) {
-            console.error('Scan processing failed:', err);
+            console.error('--- [PIPELINE] Scan processing failed:', err);
             if (detectedName) {
                 setProductName(detectedName);
             }
-            setScanStatus('⚠️ Image attached. Please enter specifics manually.');
+            setScanStatus(`⚠️ Scanning notice: ${err.message || 'Image loaded'}. You can fill specifics in the grid below.`);
         } finally {
             setIsScanning(false);
         }

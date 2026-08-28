@@ -1,72 +1,141 @@
 // Serverless Endpoint for Google Gemini API Multimodal Product Scanning
 import { authenticateRequest } from '../lib/auth.js';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 
-                       process.env.GOOGLE_GEMINI_API_KEY || 
-                       process.env.VITE_GEMINI_API_KEY || 
-                       process.env.VITE_GOOGLE_GEMINI_API_KEY || '';
+const getGeminiApiKey = () => {
+    return process.env.GEMINI_API_KEY || 
+           process.env.GOOGLE_GEMINI_API_KEY || 
+           process.env.VITE_GEMINI_API_KEY || 
+           process.env.VITE_GOOGLE_GEMINI_API_KEY || '';
+};
 
-function getCleanBase64(base64Str) {
-    if (!base64Str) return '';
+function getCleanBase64AndMime(base64Str) {
+    if (!base64Str) return { data: '', mimeType: 'image/jpeg' };
+    
+    let mimeType = 'image/jpeg';
+    let data = base64Str;
+    
     if (base64Str.startsWith('data:')) {
-        const parts = base64Str.split(';base64,');
-        return parts[1] || base64Str;
+        const matches = base64Str.match(/^data:([^;]+);base64,(.*)$/s);
+        if (matches) {
+            mimeType = matches[1] || 'image/jpeg';
+            data = matches[2] || '';
+        } else {
+            const parts = base64Str.split(';base64,');
+            data = parts[1] || base64Str;
+        }
     }
-    return base64Str;
+    
+    // Remove any leftover whitespace or newlines
+    data = data.replace(/\s/g, '');
+    return { data, mimeType };
 }
 
-async function extractTextUsingGemini(base64Image, apiKey) {
-    const cleanBase64 = getCleanBase64(base64Image);
+async function analyzePackagingWithGemini(base64Image, apiKey) {
+    const { data: cleanBase64, mimeType } = getCleanBase64AndMime(base64Image);
+    
+    if (!cleanBase64) {
+        throw new Error('Image base64 data is empty or invalid.');
+    }
+
     const candidateModels = [
-        'gemini-3.5-flash',
-        'gemini-3.6-flash',
         'gemini-2.5-flash',
-        'gemini-flash-latest'
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-flash-latest',
+        'gemini-1.5-pro'
     ];
+
+    const promptText = `You are an expert Legal Metrology and packaged commodity inspector.
+Carefully examine the provided packaging/product label image. Extract all declarations accurately without inventing, guessing, or hallucinating information.
+
+Return a strictly valid JSON object with the following structure:
+{
+  "rawText": "Complete transcript of all visible text and declarations on the label, line by line.",
+  "product": {
+    "productName": "Exact main product title or common identity (e.g. Parle-G Biscuits, Aloo Bhujia, Coca-Cola). Null if not visible.",
+    "brand": "Brand or trademark name (e.g. Haldiram's, Britannia, Nestle). Null if not visible.",
+    "netQuantity": "Numeric quantity value only (e.g. 200, 500, 1). Null if not visible.",
+    "quantityUnit": "Unit of measurement: g, kg, ml, L, pcs, or units. Null if not visible.",
+    "mrp": "Maximum Retail Price number only without currency symbols (e.g. 249.00, 45, 10.00). Do not confuse rupee symbol ₹ with digit 3. Null if not visible.",
+    "manufacturingDate": "Manufacturing / Packing date exactly as printed or in standard format (e.g. 2026-08-15, 15/08/2026, AUG 2026). Null if not visible.",
+    "expiryDate": "Best before / Expiry date or duration (e.g. 2026-12-31, 12 Months from PKD). Null if not visible.",
+    "manufacturerName": "Name of manufacturer, packer, or marketer. Null if not visible.",
+    "manufacturerAddress": "Complete physical address of the manufacturer/packer if visible. Null if not visible.",
+    "consumerCare": "Customer care phone number, helpline, email address, or contact info. Null if not visible.",
+    "fssaiLicense": "14-digit FSSAI License Number if present. Null if not visible.",
+    "countryOfOrigin": "Country of origin / manufacturing (e.g. India). Null if not visible.",
+    "unitSalePrice": "Unit sale price (USP per g/ml) if indicated. Null if not visible.",
+    "barcode": "Numeric barcode / EAN / UPC digits if visible on the label. Null if not visible."
+  }
+}
+
+Respond ONLY with the JSON object. Do not include markdown code block syntax or additional explanatory text.`;
 
     let lastError = null;
 
     for (const modelName of candidateModels) {
         try {
+            console.log(`[OCR Backend] Calling Gemini model: ${modelName}`);
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     contents: [{
                         parts: [
-                            {
-                                text: "You are an expert product label analyzer. Extract all text and declarations visible on this product packaging label accurately without hallucinating or making up missing information. Focus on capturing: Product Name/Title, Brand Name, Net Quantity/Weight, Price/MRP (specifically keeping any Indian Rupee ₹ symbols intact), Dates (MFG Date, Packing Date, EXP Date, Best Before), FSSAI License Number, Barcode digits, Manufacturer Name and Complete Address, Consumer Care contact info, and Country of Origin. Print the text clearly line-by-line as it appears on the label."
-                            },
+                            { text: promptText },
                             {
                                 inlineData: {
-                                    mimeType: "image/jpeg",
+                                    mimeType: mimeType || 'image/jpeg',
                                     data: cleanBase64
                                 }
                             }
                         ]
-                    }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        responseMimeType: "application/json"
+                    }
                 })
             });
 
             const data = await response.json();
+            
             if (response.ok && !data.error) {
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                if (text && text.trim()) {
-                    console.log(`✅ Success with Gemini model [${modelName}]`);
-                    return text;
+                const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (responseText && responseText.trim()) {
+                    try {
+                        // Strip markdown formatting if returned
+                        const cleanJsonStr = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+                        const parsed = JSON.parse(cleanJsonStr);
+                        console.log(`[OCR Backend] ✅ Successfully parsed structured extraction from [${modelName}]`);
+                        return {
+                            rawText: parsed.rawText || '',
+                            product: parsed.product || {}
+                        };
+                    } catch (parseErr) {
+                        console.warn(`[OCR Backend] JSON parse error from model [${modelName}], falling back to text:`, parseErr.message);
+                        return {
+                            rawText: responseText,
+                            product: {}
+                        };
+                    }
                 }
             } else {
-                console.warn(`Model [${modelName}] failed:`, data.error?.message || response.status);
-                lastError = data.error?.message || `HTTP ${response.status}`;
+                const errDetail = data.error?.message || `HTTP ${response.status}`;
+                console.warn(`[OCR Backend] Model [${modelName}] error:`, errDetail);
+                lastError = errDetail;
             }
         } catch (err) {
-            console.warn(`Model [${modelName}] request exception:`, err.message);
+            console.warn(`[OCR Backend] Exception with model [${modelName}]:`, err.message);
             lastError = err.message;
         }
     }
 
-    throw new Error(`All Gemini Vision models failed. Last error: ${lastError}`);
+    throw new Error(`Google Gemini Vision request failed for all candidate models. Last error: ${lastError}`);
 }
 
 export default async function handler(req, res) {
@@ -85,7 +154,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Optional user authentication check (allow guest scans)
+        // Optional user authentication check (allow unauthenticated / guest inspections)
         let userId = null;
         try {
             const decoded = await authenticateRequest(req);
@@ -93,28 +162,36 @@ export default async function handler(req, res) {
                 userId = decoded.userId;
             }
         } catch (e) {
-            // Unauthenticated/guest session - allow scanning to proceed
+            // Guest session
         }
 
         const { image } = req.body || {};
         if (!image) {
-            return res.status(400).json({ error: 'Image base64 content is required' });
+            return res.status(400).json({ error: 'Image content is required.' });
         }
 
-        if (!GEMINI_API_KEY) {
+        const apiKey = getGeminiApiKey();
+        if (!apiKey) {
             return res.status(400).json({ 
-                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in Vercel environment variables.' 
+                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in environment variables.' 
             });
         }
 
-        console.log(`Running Google Gemini API Vision Scanner (User: ${userId || 'Guest'})...`);
-        const extractedText = await extractTextUsingGemini(image, GEMINI_API_KEY);
-        console.log('✅ Google Gemini API scan successful');
+        console.log(`[OCR Backend] Processing image scan (User: ${userId || 'Guest'})...`);
+        const { rawText, product } = await analyzePackagingWithGemini(image, apiKey);
+        console.log(`[OCR Backend] ✅ Scan complete. Text length: ${rawText.length}, Product name: ${product?.productName || 'None'}`);
 
-        return res.status(200).json({ text: extractedText });
+        return res.status(200).json({
+            success: true,
+            text: rawText,
+            product: product || {}
+        });
 
     } catch (error) {
-        console.error('Gemini Vision processing handler error:', error);
-        return res.status(500).json({ error: 'Gemini Vision processing failed', details: error.message });
+        console.error('[OCR Backend] Handler error:', error);
+        return res.status(500).json({ 
+            error: 'Gemini Vision processing failed', 
+            details: error.message 
+        });
     }
 }

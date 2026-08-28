@@ -47,7 +47,7 @@ export function normalizeOCRText(rawText: string): string {
   text = text.replace(/(unit\s*(?:sale\s*)?price|usp)\s*[:\-]?\s*(?:rs\.?|inr)?\s*3\s*0\.(\d+)/gi, '$1: ₹0.$2');
   text = text.replace(/(unit\s*(?:sale\s*)?price|usp)\s*[:\-]?\s*(?:rs\.?|inr)?\s*3(\d+\.\d+)/gi, '$1: ₹$2');
   text = text.replace(/\(3(\d+\.\d+\s*\/\s*100\s*g)\)/gi, '(₹$1)');
-  text = text.replace(/\b(?:in\s*r|rs)\.?/gi, '₹');
+  text = text.replace(/\b(?:in\s*r|rs\.?)\b/gi, '₹');
 
   return text;
 }
@@ -146,7 +146,7 @@ function extractGenericName(text: string): ComplianceDeclaration {
 }
 
 function extractManufacturer(text: string): ComplianceDeclaration {
-  const pattern = /(?:manufactured\s*(?:&|and|\/)?\s*(?:packed|marketed)?\s*by|manufactured\s*by|mfd\.?\s*by|mfg\.?\s*by|manufacturing\s*by|packed\s*(?:&|and)?\s*(?:marketed|manufactured)?\s*by|marketed\s*by|manufactured\s*for|made\s*by|produced\s*by|manufactured\s*at|manufacturer\s*address|packer\s*address|manufacturer|packer|importer)\s*[:\-]?\s*([^\n\r]+(?:\n[^\n\r]+){0,3})/i;
+  const pattern = /(?:manufactured\s*(?:&|and)?\s*packed\s*by|manufactured\s*by|mfd\.?\s*by|packed\s*by|marketed\s*by|imported\s*by|distributed\s*by|dist\.?\s*by|manufacturer\s*address|packer\s*address|manufacturer|packer|importer)\s*[:\-]?\s*([^\n\r]+(?:\n[^\n\r]+){0,3})/i;
   const match = text.match(pattern);
   if (match && match[1]) {
     let block = match[1].trim();
@@ -192,78 +192,47 @@ function extractNetQuantity(text: string): ComplianceDeclaration {
 }
 
 function extractManufactureDate(text: string): ComplianceDeclaration {
-  const mfgPrefixPattern = /(?:date\s*of\s*(?:manufacture|manufacturing|production|packing|pack|packaging)|manufactur(?:ing|ed)\s*(?:date|dt|on)?|production\s*(?:date|dt|on)?|pack(?:ing|ed)?\s*(?:date|dt|on)?|date\s*packed|date\s*manufactured|mfg(?:\.|\s*date|\s*dt)?|mfd(?:\.|\s*date|\s*dt)?|pkd(?:\.|\s*date|\s*dt)?|dom)\s*[:\-\s]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i;
-  
-  const mfgMatch = text.match(mfgPrefixPattern);
-  if (mfgMatch && mfgMatch[1]) {
-    const dateMatch = mfgMatch[1].match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}))/i);
+  const patterns = [
+    /(?:mfg(?:\.|\s*date)?|mfd(?:\.|\s*date)?|manufacture\s*date|date\s*of\s*mfg|date\s*of\s*manufacture|date\s*of\s*packing|packing\s*date|packed\s*on|pkd|packed|dom)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
+    /\b(?:mfg|mfd|pkd)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i
+  ];
+  const value = firstMatch(text, patterns);
+  if (value) {
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}))/i);
     if (dateMatch) {
       return makeDeclaration(true, dateMatch[0].trim(), 'high');
     }
+    return makeDeclaration(true, value.trim(), 'medium');
   }
-
-  const lines = text.split(/[\r\n]+/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (/\b(?:mfg|mfd|pkd|packed|manufactured|production)\b/i.test(line) && !/\b(?:exp|expiry|best\s*before|use\s*by)\b/i.test(line)) {
-      const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}))/i);
-      if (dateMatch) {
-        return makeDeclaration(true, dateMatch[0].trim(), 'high');
-      }
-      if (i + 1 < lines.length) {
-        const nextDateMatch = lines[i + 1].match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}))/i);
-        if (nextDateMatch) {
-          return makeDeclaration(true, nextDateMatch[0].trim(), 'high');
-        }
-      }
-    }
-  }
-
   return makeDeclaration(false, null, 'low');
 }
 
 function extractBestBefore(text: string): ComplianceDeclaration {
-  const expPrefixPattern = /(?:best\s*b[e|o]?fore?\s*(?:end|date)?|b\.?b\.?e\.?|use\s*by\s*(?:date)?|use\s*before\s*(?:date)?|expir(?:y|ation)\s*(?:date|dt|on)?|exp(?:\.|\s*date|\s*dt)?|valid\s*(?:until|till|up\s*to)|expires\s*on)\s*[:\-\s]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i;
-  
-  const expMatch = text.match(expPrefixPattern);
-  if (expMatch && expMatch[1]) {
-    const dateMatch = expMatch[1].match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})|\d+\s*months?)/i);
+  const patterns = [
+    /(?:best\s*b[e|o]?fore?|use\s*by|expiry\s*date|exp\.?\s*date|expiry|bbe|best\s*by|use\s*before|valid\s*up\s*to)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
+    /\b(?:exp|expiry)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /(?:best\s*before\s*([0-9]+\s*(?:months?|days?|years?|weeks?)(?:\s*from\s*(?:mfg|mfd|pkd|packing|manufacture|date))?))/i
+  ];
+  const value = firstMatch(text, patterns);
+  if (value) {
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})|\d+\s*months?)/i);
     if (dateMatch) {
       return makeDeclaration(true, dateMatch[0].trim(), 'high');
     }
+    return makeDeclaration(true, value.trim(), 'medium');
   }
-
-  const relativeMatch = text.match(/(?:best\s*before\s*([0-9]+\s*(?:months?|days?|years?|weeks?)(?:\s*from\s*(?:mfg|mfd|pkd|packing|manufacture|date))?))/i);
-  if (relativeMatch && relativeMatch[1]) {
-    return makeDeclaration(true, relativeMatch[1].trim(), 'high');
-  }
-
-  const lines = text.split(/[\r\n]+/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (/\b(?:exp|expiry|expiration|use\s*by|best\s*before|valid\s*till|valid\s*until)\b/i.test(line) && !/\b(?:mfg|mfd|manufactured)\b/i.test(line)) {
-      const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})|\d+\s*months?)/i);
-      if (dateMatch) {
-        return makeDeclaration(true, dateMatch[0].trim(), 'high');
-      }
-      if (i + 1 < lines.length) {
-        const nextDateMatch = lines[i + 1].match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:(?:\d{1,2}[\s\/\-\.]*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})|\d+\s*months?)/i);
-        if (nextDateMatch) {
-          return makeDeclaration(true, nextDateMatch[0].trim(), 'high');
-        }
-      }
-    }
-  }
-
   return makeDeclaration(false, null, 'low');
 }
 
 function extractMRP(text: string): ComplianceDeclaration {
-  const mrpPrefixPattern = /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*(?:selling\s*)?price|max\s*retail\s*price|retail\s*price|maximum\s*sale\s*price|selling\s*price|recommended\s*retail\s*price)(?:\s*\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:rs\.?|₹\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
-
-  const match = text.match(mrpPrefixPattern);
-  if (match && match[1]) {
-    let num = match[1].replace(/[^\d.,]/g, '');
+  const patterns = [
+    /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|retail\s*price)\s*[:\-\(]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|inclusive|incl)/i,
+    /mrp\s*[:\-\s]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i
+  ];
+  const value = firstMatch(text, patterns);
+  if (value) {
+    let num = value.replace(/[^\d.,]/g, '');
     if (num.length >= 5 && num.startsWith('3') && num.includes('.')) {
       const rest = num.substring(1);
       if (parseFloat(rest) > 0 && parseFloat(rest) < 50000) {
@@ -274,15 +243,6 @@ function extractMRP(text: string): ComplianceDeclaration {
       return makeDeclaration(true, `₹${num}`, 'high');
     }
   }
-
-  const reverseMatch = text.match(/(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|incl|max)/i);
-  if (reverseMatch && reverseMatch[1]) {
-    let num = reverseMatch[1].replace(/[^\d.,]/g, '');
-    if (num && !isNaN(parseFloat(num)) && parseFloat(num) > 0) {
-      return makeDeclaration(true, `₹${num}`, 'high');
-    }
-  }
-
   return makeDeclaration(false, null, 'low');
 }
 

@@ -55,6 +55,8 @@ export default defineConfig(({ mode }) => {
             query = { id };
           } else if (pathname === '/api/whatsapp/send') {
             filePath = './api/whatsapp/send.js';
+          } else if (pathname === '/api/vision/ocr') {
+            filePath = './api/vision/ocr.js';
           } else {
             return next();
           }

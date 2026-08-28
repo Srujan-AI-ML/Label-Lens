@@ -1,103 +1,120 @@
-// Image preprocessing for improved AI vision accuracy
-async function preprocessImageForOCR(base64Image: string): Promise<string> {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
-        return `data:image/jpeg;base64,${base64Image}`;
-    }
+// Image preprocessing and AI vision service using Google Gemini API
 
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-
-                // Scale image to optimal OCR dimensions (min dimension ~1200px)
-                const minDim = Math.min(width, height);
-                if (minDim > 0 && minDim < 900) {
-                    const scale = 1200 / minDim;
-                    width = Math.round(width * scale);
-                    height = Math.round(height * scale);
-                } else if (Math.max(width, height) > 2600) {
-                    const scale = 2600 / Math.max(width, height);
-                    width = Math.round(width * scale);
-                    height = Math.round(height * scale);
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    resolve(`data:image/jpeg;base64,${base64Image}`);
-                    return;
-                }
-
-                ctx.drawImage(img, 0, 0, width, height);
-
-                const imgData = ctx.getImageData(0, 0, width, height);
-                const d = imgData.data;
-
-                // Grayscale & contrast enhancement
-                const contrast = 1.25; // 25% contrast boost
-                const factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
-
-                for (let i = 0; i < d.length; i += 4) {
-                    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-                    const enhanced = Math.min(255, Math.max(0, factor * (gray - 128) + 128));
-                    d[i] = enhanced;
-                    d[i + 1] = enhanced;
-                    d[i + 2] = enhanced;
-                }
-
-                ctx.putImageData(imgData, 0, 0);
-                resolve(canvas.toDataURL('image/jpeg', 0.92));
-            } catch (err) {
-                console.warn('Preprocessing canvas error, using raw image:', err);
-                resolve(`data:image/jpeg;base64,${base64Image}`);
-            }
-        };
-        img.onerror = () => {
-            resolve(`data:image/jpeg;base64,${base64Image}`);
-        };
-        img.src = base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`;
-    });
+export interface StructuredProduct {
+    productName?: string | null;
+    brand?: string | null;
+    netQuantity?: string | null;
+    quantityUnit?: string | null;
+    mrp?: string | null;
+    manufacturingDate?: string | null;
+    expiryDate?: string | null;
+    manufacturerName?: string | null;
+    manufacturerAddress?: string | null;
+    consumerCare?: string | null;
+    fssaiLicense?: string | null;
+    countryOfOrigin?: string | null;
+    unitSalePrice?: string | null;
+    barcode?: string | null;
 }
 
+export interface GeminiScanResult {
+    text: string;
+    product: StructuredProduct;
+}
 
+// Call Serverless Endpoint for Google Gemini API Vision Scanning with structured extraction and tracing
+export async function scanProductImageWithGemini(imagePayload: string): Promise<GeminiScanResult> {
+    console.log('--- [PIPELINE] SCAN START ---');
+    
+    if (!imagePayload || !imagePayload.trim()) {
+        console.error('--- [PIPELINE] ERROR: Image payload is empty ---');
+        throw new Error('Image data is missing or empty.');
+    }
 
-// Call Serverless Endpoint for Google Gemini API Vision Scanning
-export async function extractTextFromImage(base64Image: string): Promise<string> {
+    console.log('--- [PIPELINE] IMAGE RECEIVED ---');
+    
+    let mimeType = 'image/jpeg';
+    let cleanBase64 = imagePayload;
+
+    if (imagePayload.startsWith('data:')) {
+        const mimeMatch = imagePayload.match(/^data:([^;]+);base64,/);
+        if (mimeMatch) {
+            mimeType = mimeMatch[1];
+        }
+        cleanBase64 = imagePayload.split(',')[1] || imagePayload;
+    }
+
+    const byteLength = Math.round((cleanBase64.length * 3) / 4);
+    console.log(`--- [PIPELINE] IMAGE SIZE: ${byteLength} bytes (${(byteLength / 1024).toFixed(1)} KB) ---`);
+    console.log(`--- [PIPELINE] IMAGE MIME TYPE: ${mimeType} ---`);
+
+    console.log('--- [PIPELINE] IMAGE CONVERSION START ---');
+    // Ensure clean base64 payload
+    const formattedPayload = imagePayload.startsWith('data:') 
+        ? imagePayload 
+        : `data:${mimeType};base64,${cleanBase64.replace(/\s/g, '')}`;
+    console.log('--- [PIPELINE] IMAGE CONVERSION COMPLETE ---');
+
+    console.log('--- [PIPELINE] API REQUEST START ---');
+    const token = localStorage.getItem('labellens-token');
+    
+    const startTime = Date.now();
+    let response: Response;
     try {
-        const token = localStorage.getItem('labellens-token');
-        const response = await fetch('/api/vision/ocr', {
+        console.log('--- [PIPELINE] API REQUEST SENT to /api/vision/ocr ---');
+        response = await fetch('/api/vision/ocr', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: JSON.stringify({ image: base64Image })
+            body: JSON.stringify({ image: formattedPayload })
         });
-
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-            console.error('Gemini Vision API error:', response.status, JSON.stringify(data, null, 2));
-            throw new Error(data.error || data.details || `Gemini Vision processing failed (${response.status})`);
-        }
-
-        console.log('✅ Google Gemini API Vision Output:\n', data.text);
-        return data.text || '';
-    } catch (err: any) {
-        console.error('Google Gemini Vision extraction failed:', err);
-        throw new Error(err.message || 'Google Gemini API failed to analyze product image.');
+    } catch (networkErr: any) {
+        console.error('--- [PIPELINE] API NETWORK REQUEST FAILED ---', networkErr);
+        throw new Error(`API connection failed: ${networkErr.message}`);
     }
+
+    const duration = Date.now() - startTime;
+    console.log(`--- [PIPELINE] AI/OCR RESPONSE RECEIVED (Status: ${response.status} in ${duration}ms) ---`);
+
+    let data: any;
+    try {
+        data = await response.json();
+    } catch (parseErr: any) {
+        console.error('--- [PIPELINE] ERROR PARSING JSON RESPONSE ---', parseErr);
+        throw new Error(`Server returned invalid JSON response (${response.status})`);
+    }
+
+    console.log('--- [PIPELINE] RESPONSE PARSED ---', data);
+
+    if (!response.ok || data.error) {
+        const errMsg = data.error || data.details || `Gemini Vision processing failed (${response.status})`;
+        console.error('--- [PIPELINE] GEMINI API ERROR ---', errMsg);
+        throw new Error(errMsg);
+    }
+
+    const rawText: string = data.text || '';
+    const product: StructuredProduct = data.product || {};
+
+    console.log('--- [PIPELINE] PRODUCT OBJECT CREATED ---', product);
+    console.log('--- [PIPELINE] RAW TEXT EXTRACTED LENGTH ---', rawText.length);
+
+    return {
+        text: rawText,
+        product: product
+    };
+}
+
+// Backward-compatible text-only wrapper
+export async function extractTextFromImage(base64Image: string): Promise<string> {
+    const result = await scanProductImageWithGemini(base64Image);
+    return result.text;
 }
 
 // Smart date extraction from OCR text
 export function extractExpiryDate(ocrText: string): string | null {
-    console.log('OCR Text for Date Extraction:\n', ocrText);
-
+    if (!ocrText) return null;
     const lines = ocrText.split('\n');
 
     // Look for lines containing expiry keywords
@@ -176,19 +193,20 @@ export interface ProductInfo {
     barcode: string;
 }
 
-// Detect barcode using browser BarcodeDetector API (free, no credentials needed)
+// Detect barcode using browser BarcodeDetector API
 async function detectBarcodeViaBrowser(base64Image: string): Promise<string | null> {
-    if (!('BarcodeDetector' in window)) {
+    if (typeof window === 'undefined' || !('BarcodeDetector' in window)) {
         return null;
     }
 
     try {
-        // @ts-ignore - BarcodeDetector is not in TS types yet
-        const detector = new BarcodeDetector({
+        // @ts-ignore - BarcodeDetector
+        const detector = new (window as any).BarcodeDetector({
             formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code']
         });
 
-        const response = await fetch(`data:image/jpeg;base64,${base64Image}`);
+        const formatted = base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`;
+        const response = await fetch(formatted);
         const blob = await response.blob();
         const bitmap = await createImageBitmap(blob);
 
@@ -222,7 +240,7 @@ export async function detectBarcode(base64Image: string, preExtractedText?: stri
         const explicitPattern = /(?:barcode|ean(?:-?13|-?8)?|upc(?:-?a)?|gtin(?:-?14|-?12|-?13|-?8)?)\s*[:\-]?\s*(\d{8,14})\b/i;
         const expMatch = text.match(explicitPattern);
         if (expMatch && expMatch[1]) {
-            console.log('Detected explicit barcode from OCR text:', expMatch[1]);
+            console.log('Detected explicit barcode from text:', expMatch[1]);
             return expMatch[1].trim();
         }
 
@@ -232,7 +250,7 @@ export async function detectBarcode(base64Image: string, preExtractedText?: stri
             const cleanDigits = line.replace(/\s+/g, '');
             if (/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(cleanDigits)) {
                 if (/^(?:1800|100|200)/.test(cleanDigits)) continue;
-                console.log('Detected standalone numeric barcode from OCR line:', cleanDigits);
+                console.log('Detected standalone numeric barcode from line:', cleanDigits);
                 return cleanDigits;
             }
         }
@@ -298,9 +316,8 @@ export async function lookupProduct(barcode: string): Promise<ProductInfo | null
                 const productName = item.title || item.brand;
 
                 if (productName) {
-                    const categoryStr = (item.category || '').toLowerCase();
-                    const category = mapToCategory(categoryStr, productName);
-                    const expiryDays = getEstimatedExpiryDays(category, categoryStr);
+                    const category = mapToCategory(item.category || '', productName);
+                    const expiryDays = getEstimatedExpiryDays(category, item.category || '');
 
                     console.log('✅ Found in UPCitemdb:', productName);
                     return {
@@ -317,86 +334,63 @@ export async function lookupProduct(barcode: string): Promise<ProductInfo | null
     return null;
 }
 
-// Map Open Food Facts categories to our categories
-function mapToCategory(categories: string, productName: string): ProductInfo['category'] {
-    const lowerName = productName.toLowerCase();
-    const lowerCats = categories.toLowerCase();
+// Category mapping helper
+function mapToCategory(categoryStr: string, name: string): 'Dairy' | 'Grain' | 'Vegetable' | 'Meat' | 'Snacks' | 'Other' {
+    const text = `${categoryStr} ${name}`.toLowerCase();
 
-    // Dairy
-    if (lowerCats.includes('dairy') || lowerCats.includes('milk') || lowerCats.includes('cheese') ||
-        lowerCats.includes('yogurt') || lowerCats.includes('butter') || lowerCats.includes('cream') ||
-        lowerCats.includes('lassi') || lowerCats.includes('paneer') ||
-        lowerName.includes('milk') || lowerName.includes('cheese') || lowerName.includes('yogurt') ||
-        lowerName.includes('butter') || lowerName.includes('paneer') || lowerName.includes('curd') ||
-        lowerName.includes('dahi') || lowerName.includes('ghee') || lowerName.includes('lassi')) {
+    if (text.includes('milk') || text.includes('cheese') || text.includes('yogurt') ||
+        text.includes('butter') || text.includes('cream') || text.includes('dairy') ||
+        text.includes('paneer') || text.includes('curd') || text.includes('ghee')) {
         return 'Dairy';
     }
-
-    // Meat
-    if (lowerCats.includes('meat') || lowerCats.includes('poultry') || lowerCats.includes('fish') ||
-        lowerCats.includes('seafood') || lowerCats.includes('chicken') || lowerCats.includes('beef') ||
-        lowerName.includes('chicken') || lowerName.includes('mutton') || lowerName.includes('fish') ||
-        lowerName.includes('egg') || lowerName.includes('meat') || lowerName.includes('prawn') ||
-        lowerName.includes('kebab') || lowerName.includes('sausage')) {
-        return 'Meat';
+    if (text.includes('bread') || text.includes('rice') || text.includes('flour') ||
+        text.includes('pasta') || text.includes('cereal') || text.includes('oats') ||
+        text.includes('wheat') || text.includes('grain') || text.includes('noodle')) {
+        return 'Grain';
     }
-
-    // Vegetable/Fruits
-    if (lowerCats.includes('vegetable') || lowerCats.includes('fruit') || lowerCats.includes('produce') ||
-        lowerCats.includes('fresh') || lowerCats.includes('salad') ||
-        lowerName.includes('vegetable') || lowerName.includes('fruit') || lowerName.includes('sabzi')) {
+    if (text.includes('vegetable') || text.includes('fruit') || text.includes('apple') ||
+        text.includes('banana') || text.includes('tomato') || text.includes('potato') ||
+        text.includes('onion') || text.includes('spinach') || text.includes('salad')) {
         return 'Vegetable';
     }
-
-    // Snacks - chips, biscuits, namkeen, etc.
-    if (lowerCats.includes('snack') || lowerCats.includes('chips') || lowerCats.includes('biscuit') ||
-        lowerCats.includes('cookie') || lowerCats.includes('cracker') || lowerCats.includes('wafer') ||
-        lowerCats.includes('namkeen') || lowerCats.includes('rusk') ||
-        lowerName.includes('chips') || lowerName.includes('lays') || lowerName.includes('kurkure') ||
-        lowerName.includes('biscuit') || lowerName.includes('cookie') || lowerName.includes('namkeen') ||
-        lowerName.includes('bhujia') || lowerName.includes('mixture') || lowerName.includes('haldiram') ||
-        lowerName.includes('rusk') || lowerName.includes('cracker') || lowerName.includes('wafer') ||
-        lowerName.includes('oreo') || lowerName.includes('parle') || lowerName.includes('britannia') ||
-        lowerName.includes('munch') || lowerName.includes('snack')) {
-        return 'Snacks';
+    if (text.includes('chicken') || text.includes('meat') || text.includes('beef') ||
+        text.includes('pork') || text.includes('fish') || text.includes('egg') ||
+        text.includes('mutton') || text.includes('seafood')) {
+        return 'Meat';
     }
-
-    // Grain - bread, rice, flour, noodles
-    if (lowerCats.includes('grain') || lowerCats.includes('bread') || lowerCats.includes('cereal') ||
-        lowerCats.includes('flour') || lowerCats.includes('rice') || lowerCats.includes('pasta') ||
-        lowerCats.includes('noodle') ||
-        lowerName.includes('bread') || lowerName.includes('rice') || lowerName.includes('flour') ||
-        lowerName.includes('noodle') || lowerName.includes('maggi') || lowerName.includes('toast')) {
-        return 'Grain';
+    if (text.includes('snack') || text.includes('chip') || text.includes('biscuit') ||
+        text.includes('cookie') || text.includes('chocolate') || text.includes('candy') ||
+        text.includes('cracker') || text.includes('namkeen') || text.includes('bhujia')) {
+        return 'Snacks';
     }
 
     return 'Other';
 }
 
-// Estimate shelf life based on category
-function getEstimatedExpiryDays(category: ProductInfo['category'], categories: string): number {
-    // Check for specific subcategories
-    if (categories.includes('fresh') || categories.includes('refrigerated')) {
-        return 7; // Fresh items: ~1 week
-    }
+// Estimated shelf-life in days
+function getEstimatedExpiryDays(category: string, rawCategory: string): number {
+    const text = rawCategory.toLowerCase();
 
-    if (categories.includes('frozen')) {
-        return 90; // Frozen items: ~3 months
-    }
+    if (text.includes('fresh milk') || text.includes('raw milk')) return 5;
+    if (text.includes('pasteurized milk')) return 7;
+    if (text.includes('yogurt') || text.includes('curd')) return 10;
+    if (text.includes('cheese')) return 21;
+    if (text.includes('butter') || text.includes('ghee')) return 90;
+    if (text.includes('bread')) return 5;
+    if (text.includes('fresh meat') || text.includes('raw chicken') || text.includes('fish')) return 3;
+    if (text.includes('egg')) return 21;
+    if (text.includes('leafy') || text.includes('spinach') || text.includes('lettuce')) return 4;
+    if (text.includes('apple') || text.includes('orange') || text.includes('citrus')) return 14;
+    if (text.includes('banana')) return 5;
+    if (text.includes('potato') || text.includes('onion')) return 30;
+    if (text.includes('canned') || text.includes('preserve')) return 365;
 
     switch (category) {
-        case 'Dairy':
-            return 14; // Dairy: ~2 weeks
-        case 'Meat':
-            return 5; // Fresh meat: ~5 days
-        case 'Vegetable':
-            return 7; // Fresh produce: ~1 week  
-        case 'Grain':
-            return 180; // Dry goods: ~6 months
-        case 'Snacks':
-            return 120; // Packaged snacks: ~4 months
-        default:
-            return 30; // Default: ~1 month
+        case 'Dairy': return 7;
+        case 'Vegetable': return 7;
+        case 'Meat': return 3;
+        case 'Grain': return 180;
+        case 'Snacks': return 120;
+        default: return 14;
     }
 }
-

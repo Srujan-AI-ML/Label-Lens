@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from './CameraModal';
-import { detectBarcode, lookupProduct, extractTextFromImage } from '../services/visionService';
+import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
 import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
 import {
     X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine
@@ -225,41 +225,109 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         setRawText('');
 
         setIsProcessing(true);
-        setStatusMsg('Scanning image and reading packaging declarations...');
-        const base64Data = imageSrc.split(',')[1];
+        setStatusMsg('Scanning image and reading packaging declarations via Google Gemini...');
+        const base64Data = imageSrc.split(',')[1] || imageSrc;
 
         let detectedBarcode = '';
         let detectedName = '';
 
         try {
-            // Step 1: OCR Text Extraction
-            setStatusMsg('Extracting packaging text via OCR...');
-            const text = await extractTextFromImage(base64Data);
-            console.log('Modal Scan Raw OCR Output:\n', text);
+            // Step 1: Barcode Detection
+            try {
+                const bcode = await detectBarcode(base64Data);
+                if (bcode) {
+                    detectedBarcode = bcode;
+                    setBarcode(bcode);
+                    setStatusMsg(`Barcode detected: ${bcode}. Querying product registry...`);
+                    const info = await lookupProduct(bcode);
+                    if (info && info.name) {
+                        detectedName = info.name;
+                        setProductName(info.name);
+                    }
+                }
+            } catch (barcodeErr) {
+                console.warn('Modal barcode detection notice:', barcodeErr);
+            }
 
-            // Step 2: Barcode Detection
-            const bcode = await detectBarcode(base64Data, text || undefined);
-            if (bcode) {
-                detectedBarcode = bcode;
-                setBarcode(bcode);
-                setStatusMsg(`Barcode detected: ${bcode}. Querying product registry...`);
-                const info = await lookupProduct(bcode);
-                if (info && info.name) {
-                    detectedName = info.name;
-                    setProductName(info.name);
+            // Step 2: Google Gemini AI Multimodal Vision Analysis
+            setStatusMsg('Extracting packaging declarations with Google Gemini AI...');
+            const scanResult = await scanProductImageWithGemini(imageSrc);
+            const { text, product } = scanResult;
+
+            if (text) {
+                setRawText(text);
+            }
+
+            // Step 3: Populate modal input fields directly from structured Gemini data
+            if (product) {
+                if (product.productName) {
+                    setProductName(product.productName);
+                } else if (detectedName) {
+                    setProductName(detectedName);
+                }
+
+                if (product.netQuantity) {
+                    setNetQuantity(product.netQuantity);
+                }
+                if (product.quantityUnit) {
+                    const u = product.quantityUnit.toLowerCase();
+                    if (['g', 'kg', 'ml', 'l', 'pcs', 'units'].includes(u)) {
+                        setQuantityUnit(u === 'l' ? 'L' : u);
+                    } else {
+                        setQuantityUnit(product.quantityUnit);
+                    }
+                }
+                if (product.mrp) {
+                    const cleanMrp = String(product.mrp).replace(/[₹\s,]/g, '');
+                    setMrp(cleanMrp);
+                }
+                if (product.manufacturingDate) {
+                    const formatted = formatToISODate(product.manufacturingDate);
+                    setMfgDate(formatted || product.manufacturingDate);
+                }
+                if (product.expiryDate) {
+                    const formatted = formatToISODate(product.expiryDate);
+                    setExpiryDate(formatted || product.expiryDate);
+                }
+
+                const mfgFull = [product.manufacturerName, product.manufacturerAddress].filter(Boolean).join(', ');
+                if (mfgFull) {
+                    setManufacturer(mfgFull);
+                }
+
+                if (product.consumerCare) {
+                    setConsumerCare(product.consumerCare);
+                }
+                if (product.fssaiLicense) {
+                    const fMatch = String(product.fssaiLicense).match(/\d{14}/);
+                    setFssaiLicense(fMatch ? fMatch[0] : String(product.fssaiLicense));
+                }
+                if (product.countryOfOrigin) {
+                    setCountryOfOrigin(product.countryOfOrigin);
+                }
+                if (product.unitSalePrice) {
+                    setUnitPrice(product.unitSalePrice);
+                }
+                if (product.barcode) {
+                    setBarcode(product.barcode);
+                } else if (detectedBarcode) {
+                    setBarcode(detectedBarcode);
                 }
             }
 
+            // Step 4: Fallback auto-populate on raw text
             if (text && text.trim()) {
-                setRawText(text);
                 autoPopulateFromText(text, detectedName, detectedBarcode);
-                setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
-            } else {
-                setStatusMsg('⚠️ Image attached. No clear text could be detected. Please fill specifics manually.');
             }
+
+            setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
+
         } catch (err: any) {
             console.error('Scan processing error:', err);
-            setStatusMsg('Image loaded. You can fill/edit the specifics grid directly.');
+            if (detectedName) {
+                setProductName(detectedName);
+            }
+            setStatusMsg(`⚠️ Notice: ${err.message || 'Image loaded'}. You can fill specifics directly.`);
         } finally {
             setIsProcessing(false);
         }
