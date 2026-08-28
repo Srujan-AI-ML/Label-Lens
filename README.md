@@ -2,7 +2,7 @@
 
 > **An AI-powered, automated compliance checking system for packaged commodities under the Legal Metrology (Packaged Commodities) Rules, 2011.**
 
-Packaged commodities sold across retail stores, supermarkets, and e-commerce platforms in India must bear mandatory declarations in prescribed formats. This application gives enforcement officials and consumers an instant, automated mechanism to scan packaging, extract text via AI & OCR, detect barcodes, and validate all 10 mandatory declarations — identifying non-compliances and violations in seconds.
+Packaged commodities sold across retail stores, supermarkets, and e-commerce platforms in India must bear mandatory declarations in prescribed formats. This application gives enforcement officials and consumers an instant, automated mechanism to scan packaging, analyze labels via Google Gemini API multimodal vision, detect barcodes, and validate all 10 mandatory declarations — identifying non-compliances and violations in seconds.
 
 ---
 
@@ -14,7 +14,6 @@ Packaged commodities sold across retail stores, supermarkets, and e-commerce pla
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Google Cloud](https://img.shields.io/badge/Google%20Cloud-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
@@ -24,12 +23,11 @@ Packaged commodities sold across retail stores, supermarkets, and e-commerce pla
 
 | 🔧 Component | 💻 Technology | 📝 Responsibilities & Description |
 | :--- | :--- | :--- |
-| **Google Cloud Vision API** | Google Cloud Vision REST API | Performs primary OCR and character detection on uploaded product packaging images, including dense packaging fine print. |
-| **Google Gemini API** | Google Gemini Vision API | Interprets and structures label text into formatted product fields, providing intelligent semantic extraction and serverless fallback scanning. |
+| **Google Gemini API** | Google Gemini Vision API (`gemini-1.5-flash`) | Performs direct multimodal image understanding, character recognition, and structured declaration parsing on uploaded product packaging images. |
 | **Frontend UI & Views** | TypeScript, React 19, Tailwind CSS | Responsive inspection dashboard, grid form editor, live rules checklists, and dark mode interface. |
-| **Backend & REST APIs** | JavaScript (Node.js) | Vercel Serverless Functions for inspection persistence (`/api/products`), single product queries (`/api/products/:id`), and serverless OCR proxy (`/api/vision/ocr`). |
+| **Backend & REST APIs** | JavaScript (Node.js) | Vercel Serverless Functions for inspection persistence (`/api/products`), single product queries (`/api/products/:id`), and serverless AI proxy (`/api/vision/ocr`). |
 | **Database & Persistence** | MongoDB Atlas NoSQL | Cloud-hosted NoSQL document database storing inspection logs, compliance scores, and evidence photos. |
-| **Authentication & Security** | JWT (`jsonwebtoken`, `jose`), `bcryptjs` | Role-based user authentication, password salting/hashing, and PKCS8 service account key parsing. |
+| **Authentication & Security** | JWT (`jsonwebtoken`), `bcryptjs` | Role-based user authentication and password salting/hashing. |
 | **Report Generation & PDF** | CSS3 (`@media print`), JavaScript | Official digital compliance inspection certificates with print-to-PDF export. |
 
 ---
@@ -37,7 +35,7 @@ Packaged commodities sold across retail stores, supermarkets, and e-commerce pla
 ## ✨ Key Features
 
 ### 1. 🔍 Multi-Modal AI Packaging Scanner
-- **📷 Camera Scan**: Real-time camera viewfinder with alignment guide and OCR extraction.
+- **📷 Camera Scan**: Real-time camera viewfinder with alignment guide and Gemini AI extraction.
 - **📤 Image Upload**: Drag-and-drop or file upload for high-resolution packaging photos and evidence.
 - **✍️ Mandatory Specifics Grid**: Interactive, emoji/icon-rich grid to manually fill or edit declaration specifics (Net Weight, MRP, Mfg Date, Expiry, Manufacturer, FSSAI, Consumer Care, Origin, USP).
 
@@ -59,7 +57,7 @@ Validates all **10 mandatory declarations** required under the Legal Metrology (
 
 ### 3. 📊 Enforcement Dashboard & Live Compliance Score
 - **Real-Time Side Box**: Displays the **Rules 2011 Checklist** with **Green Ticks (✔️ Pass)** for compliant fields and **Red Crosses (❌ Fail)** for missing or invalid declarations.
-- **Dynamic Score Counter**: Calculates compliance score in real time based on actual validated form states and raw OCR data.
+- **Dynamic Score Counter**: Calculates compliance score in real time based on actual validated form states and extracted label data.
 - **Persistent Database Registry**: Searchable product registry with status filters (`Compliant`, `Partially Compliant`, `Non-Compliant`).
 - **Official PDF Certificates**: Instant print/export for digital inspection certificates with inspector field notes.
 
@@ -76,11 +74,7 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/smartbite
 # JWT Secret Key (Required)
 JWT_SECRET=your-secure-jwt-secret
 
-# Google Cloud Vision API Credentials (Optional / Production OCR)
-GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----"
-
-# Google Gemini API Key (Required / Production AI Vision Fallback)
+# Google Gemini API Key (Required / Production AI Multimodal Vision)
 GEMINI_API_KEY=your-gemini-api-key-from-google-ai-studio
 ```
 
@@ -119,7 +113,7 @@ npm run build
    git push origin main
    ```
 2. Link the repository to your Vercel account.
-3. Add `MONGODB_URI`, `JWT_SECRET`, and `GEMINI_API_KEY` (or `GOOGLE_CLOUD_*`) in **Vercel → Project Settings → Environment Variables**.
+3. Add `MONGODB_URI`, `JWT_SECRET`, and `GEMINI_API_KEY` in **Vercel → Project Settings → Environment Variables**.
 4. Redeploy to update the live production environment.
 
 ---

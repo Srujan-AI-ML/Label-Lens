@@ -2,7 +2,7 @@
 
 **Author:** Srujan  
 **Contact:** asgaladechronicles@gmail.com  
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 This document provides a comprehensive technical overview of **Label Lens**, designed for developers, maintainers, and hackathon technical evaluators.
 
@@ -16,7 +16,7 @@ Label Lens is built on a modern full-stack architecture featuring a **Serverless
 graph TD
     A[Client UI - React + Vite] -->|HTTPS Requests| B[Serverless Endpoints - Vercel Node.js]
     B -->|Mongoose / Native Driver| C[(MongoDB Atlas Database)]
-    B -->|Secure API Query| D[Google Cloud Vision OCR]
+    B -->|Multimodal AI Query| D[Google Gemini API]
     A -->|Barcode Detection API| E[Local Browser SDK / Fallback]
 ```
 
@@ -31,7 +31,7 @@ graph TD
 ### 2. Backend: Serverless Functions (Vercel Node.js API)
 *   Located in the `/api` directory.
 *   Runs on Vercel's Edge/Serverless infrastructure, meaning zero maintenance, instant horizontal scaling, and zero hosting costs when inactive.
-*   Uses **Express-like micro-routes** mapping directly to database handlers.
+*   Uses **Express-like micro-routes** mapping directly to database handlers and AI vision proxies.
 
 ### 3. Database: MongoDB Atlas (Mongoose ODM / Native Driver)
 *   **MongoDB** was chosen for its schema flexibility, allowing scans with variable numbers of declarations and violations to be saved dynamically without strict migrations.
@@ -55,31 +55,30 @@ graph TD
     1. Client-side Google Identity Services SDK requests authorization and returns a Base64 ID Token (`credential`) to `LoginPage.tsx`.
     2. The token is sent to the Vercel API endpoint `/api/auth/google`.
     3. The backend uses `google-auth-library` (`OAuth2Client.verifyIdToken`) to cryptographically verify the signature using Google's public keys.
-    4. Upon successful validation, the backend matches the Google ID payload (`sub`) against the database. If it's a new account, it creates a sanitized unique username (appending incremental suffixes like `_1`, `_2` if the name is already taken to avoid duplicate index database exceptions).
+    4. Upon successful validation, the backend matches the Google ID payload (`sub`) against the database. If it's a new account, it creates a sanitized unique username.
     5. The server signs a JSON Web Token (JWT) using a secure `JWT_SECRET` key and passes it back to the client. The client stores it locally in the browser (`labellens-token`).
 
 ### 3. Dynamic Date Normalization (`formatToISODate`)
 *   **Source Files:** [`src/pages/ScanProduct.tsx`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/pages/ScanProduct.tsx) & [`src/components/AddProductModal.tsx`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/components/AddProductModal.tsx)
-*   **Challenge:** OCR scans pull dates in unstructured text strings containing dot separators, forward slashes, or 2-digit years (e.g. `20.10.15` or `08/26`). Browsers require strict ISO standard `YYYY-MM-DD` inputs to populate calendar datepickers.
+*   **Challenge:** Scans pull dates in unstructured text strings containing dot separators, forward slashes, or 2-digit years (e.g. `20.10.15` or `08/26`). Browsers require strict ISO standard `YYYY-MM-DD` inputs to populate calendar datepickers.
 *   **Solution:** A custom string normalization pipeline evaluates the text through regular expressions:
     *   *3-part Dates:* `DD.MM.YY(YY)` -> Normalizes short years by appending `20` prefix to the 2-digit year (e.g. `15` becomes `2015`) and returns `YYYY-MM-DD`.
     *   *2-part Dates:* `MM/YY(YY)` -> Extracts month and year, defaults day to `01`, converts 2-digit years, and outputs `YYYY-MM-01`.
 
-### 4. Secure Serverless Google Cloud Vision OCR Proxy
+### 4. Secure Serverless Google Gemini API Vision Proxy
 *   **Source Files:** [`api/vision/ocr.js`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/api/vision/ocr.js) & [`src/services/visionService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/visionService.ts)
-*   **Challenge:** Initiating JWT signing and communicating directly with the Google Cloud Vision API from the React frontend requires bundling Google Cloud Service Account Private Keys (`private_key`) inside the client-side browser files. This poses an extreme security vulnerability because anyone inspect-debugging the page can steal the credentials and billing quota.
-*   **Solution:** Removed all client-side private key exposures and `jose` dependencies. The React client now transmits only the raw base64 image data to the secure `/api/vision/ocr` backend endpoint. The backend handles the JWT generation, signs it via `jsonwebtoken` on the server using hidden environment variables, exchanges it for Google API tokens, queries the Vision OCR API securely, and passes the extracted text back.
-*   **Access Control:** The backend proxy is protected by JWT verification middleware (`authenticateRequest(req)`). Only signed-in inspection users are authorized to execute OCR, protecting Google Cloud quotas against external scrapers or billing attacks.
+*   **Architecture:** The React client transmits raw base64 image data to `/api/vision/ocr`. The serverless backend proxy securely authenticates the user JWT, invokes the Google Gemini API (`gemini-1.5-flash`) using the server-side `GEMINI_API_KEY`, extracts the label text and packaging declarations with zero credential leaks, and returns the response to the client.
+*   **Access Control:** The backend proxy is protected by JWT verification middleware (`authenticateRequest(req)`). Only signed-in inspection users are authorized to execute AI vision scans.
 
 ---
 
 ## 🧠 Core Algorithmic Systems
 
-### 1. OCR Parser & Capturing Engine
+### 1. Compliance Parser & Capturing Engine
 *   **Service File:** [`src/services/complianceService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/complianceService.ts)
-*   Runs OCR text blocks through a pattern-matching state machine to extract the 10 mandatory declarations under Legal Metrology Rules.
+*   Runs Gemini AI text blocks through a pattern-matching state machine to extract the 10 mandatory declarations under Legal Metrology Rules.
 *   Uses regex capture groups rather than raw strings to discard prefixes (e.g. parsing `MRP: Rs. 250.00` down to `250.00`).
-*   Configured with spelling-fault-tolerant regex patterns to capture text even with typical OCR reading mistakes (e.g., matching "best before" when read as "best bfore", "best befor", or "best bfor").
+*   Normalizes Rupee symbol (`₹`) corruptions without altering non-currency numbers.
 
 ### 2. Legal Metrology Rule 13 Font Analyzer
 *   Evaluates font height compliance dynamically matching India's **Legal Metrology (Packaged Commodities) Rules, 2011 (Rule 13)**.
@@ -90,30 +89,6 @@ graph TD
         *   50g – 200g: **1.5 mm**
         *   200g – 1kg: **2.0 mm**
         *   $>$ 1kg: **4.0 mm**
-    3. Evaluate OCR confidence scores on all parsed tokens. If the confidence of any verified token is `low` (indicating printing size is too small, blurry, or low-contrast), the system generates a **Readability / Font Size Check** violation displaying the required minimum legal height in millimeters.
-
-### 3. Dual-Layer Barcode Engine
-*   **Service File:** [`src/services/visionService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/visionService.ts)
-*   **Primary Layer:** Native browser `BarcodeDetector` processing canvas frame buffers locally.
-*   **Secondary Layer:** Server-side fallback that extracts barcode digits directly from raw text layouts using regex patterns if camera drivers fail.
+    3. Evaluate OCR confidence scores on all parsed tokens. If the confidence of any verified token is `low`, the system generates a **Readability / Font Size Check** violation displaying the required minimum legal height in millimeters.
 
 ---
-
-## 🚀 Local Setup & Build Commands
-
-1.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-2.  **Run development server:**
-    ```bash
-    npm run dev
-    ```
-3.  **Compile verification build:**
-    ```bash
-    npx tsc --noEmit
-    ```
-4.  **Production build compilation:**
-    ```bash
-    npm run build
-    ```

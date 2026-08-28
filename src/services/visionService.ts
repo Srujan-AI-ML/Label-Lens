@@ -1,89 +1,4 @@
-import * as jose from 'jose';
-
-const CLIENT_SERVICE_ACCOUNT = {
-    client_email: import.meta.env.VITE_GOOGLE_CLOUD_CLIENT_EMAIL || '',
-    private_key: (import.meta.env.VITE_GOOGLE_CLOUD_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    token_uri: "https://oauth2.googleapis.com/token"
-};
-
-const hasClientVisionCredentials = (): boolean => {
-    return !!(
-        CLIENT_SERVICE_ACCOUNT.client_email && 
-        CLIENT_SERVICE_ACCOUNT.private_key && 
-        !CLIENT_SERVICE_ACCOUNT.client_email.includes('your-service-account')
-    );
-};
-
-let cachedClientToken: { token: string; expiry: number } | null = null;
-
-async function getClientAccessToken(): Promise<string> {
-    if (cachedClientToken && Date.now() < cachedClientToken.expiry - 60000) {
-        return cachedClientToken.token;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-        iss: CLIENT_SERVICE_ACCOUNT.client_email,
-        sub: CLIENT_SERVICE_ACCOUNT.client_email,
-        aud: CLIENT_SERVICE_ACCOUNT.token_uri,
-        iat: now,
-        exp: now + 3600,
-        scope: "https://www.googleapis.com/auth/cloud-vision"
-    };
-
-    const privateKey = await jose.importPKCS8(CLIENT_SERVICE_ACCOUNT.private_key, 'RS256');
-    const jwt = await new jose.SignJWT(payload)
-        .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-        .sign(privateKey);
-
-    const tokenResponse = await fetch(CLIENT_SERVICE_ACCOUNT.token_uri, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion: jwt
-        })
-    });
-
-    const tokenData = await tokenResponse.json();
-    if (tokenData.error) {
-        throw new Error(`Token error: ${tokenData.error_description || tokenData.error}`);
-    }
-
-    cachedClientToken = {
-        token: tokenData.access_token,
-        expiry: Date.now() + (tokenData.expires_in * 1000)
-    };
-
-    return cachedClientToken.token;
-}
-
-async function extractTextFromGoogleVisionDirectly(base64Image: string): Promise<string> {
-    const accessToken = await getClientAccessToken();
-    const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            requests: [{
-                image: { content: base64Image },
-                features: [{ type: 'TEXT_DETECTION' }]
-            }]
-        })
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(`Google Vision API error (${response.status})`);
-    }
-
-    return data.responses?.[0]?.fullTextAnnotation?.text ||
-        data.responses?.[0]?.textAnnotations?.[0]?.description || '';
-}
-
-// Image preprocessing for improved OCR accuracy
+// Image preprocessing for improved AI vision accuracy
 async function preprocessImageForOCR(base64Image: string): Promise<string> {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
         return `data:image/jpeg;base64,${base64Image}`;
@@ -151,7 +66,7 @@ async function preprocessImageForOCR(base64Image: string): Promise<string> {
 
 
 
-// Call Server-Side Google Cloud Vision API Proxy or Direct Client Vision Fallback
+// Call Serverless Endpoint for Google Gemini API Vision Scanning
 export async function extractTextFromImage(base64Image: string): Promise<string> {
     try {
         const token = localStorage.getItem('labellens-token');
@@ -167,43 +82,16 @@ export async function extractTextFromImage(base64Image: string): Promise<string>
         const data = await response.json();
 
         if (!response.ok || data.error) {
-            console.error('Vision API error:', response.status, JSON.stringify(data, null, 2));
-            if (hasClientVisionCredentials()) {
-                console.log('Attempting direct client-side Google Vision fallback...');
-                const text = await extractTextGoogleVisionFallback(base64Image);
-                if (text && text.trim()) return text;
-            }
-            throw new Error(data.error || data.details || `Google Vision OCR failed (${response.status})`);
+            console.error('Gemini Vision API error:', response.status, JSON.stringify(data, null, 2));
+            throw new Error(data.error || data.details || `Gemini Vision processing failed (${response.status})`);
         }
 
-        if (data.isMock) {
-            if (hasClientVisionCredentials()) {
-                const text = await extractTextGoogleVisionFallback(base64Image);
-                if (text && text.trim()) return text;
-            }
-            throw new Error('Google Cloud Vision API credentials are not configured on the server. Please set GOOGLE_CLOUD_CLIENT_EMAIL and GOOGLE_CLOUD_PRIVATE_KEY.');
-        }
-
-        console.log('✅ Google Cloud Vision API OCR Output:\n', data.text);
+        console.log('✅ Google Gemini API Vision Output:\n', data.text);
         return data.text || '';
     } catch (err: any) {
-        console.error('Google Vision OCR extraction failed:', err);
-        if (hasClientVisionCredentials()) {
-            try {
-                const text = await extractTextGoogleVisionFallback(base64Image);
-                if (text && text.trim()) return text;
-            } catch (clientErr) {
-                console.error('Direct client Vision fallback failed:', clientErr);
-            }
-        }
-        throw new Error(err.message || 'Google Cloud Vision API failed to scan image.');
+        console.error('Google Gemini Vision extraction failed:', err);
+        throw new Error(err.message || 'Google Gemini API failed to analyze product image.');
     }
-}
-
-async function extractTextGoogleVisionFallback(base64Image: string): Promise<string> {
-    const text = await extractTextFromGoogleVisionDirectly(base64Image);
-    console.log('Raw Direct Client Google Vision OCR Output:\n', text);
-    return text;
 }
 
 // Smart date extraction from OCR text
