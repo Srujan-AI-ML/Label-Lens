@@ -266,52 +266,33 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     autoPopulateFromText(text, detectedName, detectedBarcode);
                     setScanStatus('✅ Text extracted successfully! Review specifics in grid below.');
 
-                    // Determine final name to use for analysis compliance check
                     const analysis = analyseCompliance(text, detectedName);
                     const decs = analysis.declarations;
                     const finalName = (decs.genericName?.present && decs.genericName.value) || detectedName;
                     
                     if (finalName && finalName.trim()) {
                         setProductName(finalName);
-                    } else {
-                        setProductName('Could not identify product');
-                    }
-
-                    // Determine if any critical fields are missing
-                    const missingKeys = Object.entries(analysis.declarations)
-                        .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
-                    
-                    if (missingKeys.length > 0) {
-                        alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
                     }
                 } else {
                     console.log('No text was returned by OCR.');
                     if (detectedName) {
                         setProductName(detectedName);
-                    } else {
-                        setProductName('Could not identify product');
                     }
-                    setScanStatus('⚠️ Image attached, but no text could be extracted.');
+                    setScanStatus('⚠️ Image attached. Review and edit details in grid below.');
                 }
             } catch (ocrError: any) {
                 console.warn('OCR notice:', ocrError);
                 if (detectedName) {
                     setProductName(detectedName);
-                } else {
-                    setProductName('Could not identify product');
                 }
                 setScanStatus('Image attached. Please review/fill the specifics in the grid below.');
-                alert('⚠️ Specific details failed to scan. Please update manually.');
             }
         } catch (err: any) {
             console.error('Scan processing failed:', err);
             if (detectedName) {
                 setProductName(detectedName);
-            } else {
-                setProductName('Could not identify product');
             }
-            setScanStatus('Image loaded. You can fill/edit the specifics grid directly.');
-            alert('⚠️ Specific details failed to scan. Please update manually.');
+            setScanStatus('⚠️ Image attached. Please enter specifics manually.');
         } finally {
             setIsScanning(false);
         }

@@ -254,22 +254,12 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 setRawText(text);
                 autoPopulateFromText(text, detectedName, detectedBarcode);
                 setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
-
-                // Determine if any critical fields are missing
-                const analysis = analyseCompliance(text, detectedName);
-                const missingKeys = Object.entries(analysis.declarations)
-                    .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
-                
-                if (missingKeys.length > 0) {
-                    alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
-                }
             } else {
                 setStatusMsg('⚠️ Image attached. No clear text could be detected. Please fill specifics manually.');
             }
         } catch (err: any) {
             console.error('Scan processing error:', err);
             setStatusMsg('Image loaded. You can fill/edit the specifics grid directly.');
-            alert('⚠️ Specific details failed to scan. Please update manually.');
         } finally {
             setIsProcessing(false);
         }
