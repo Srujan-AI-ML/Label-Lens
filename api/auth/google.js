@@ -91,7 +91,9 @@ export default async function handler(req, res) {
             }
             console.log('Existing user logged in:', user.username || user.email);
         } else {
-            // Generate a unique username to avoid duplicate key violations
+            // Check if username and password were provided for custom signup
+            const { username, password } = req.body || {};
+            
             let baseUsername = name.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/\s+/g, '_');
             if (baseUsername.length < 3) {
                 baseUsername = 'user_' + Math.random().toString(36).substring(2, 7);
@@ -103,21 +105,50 @@ export default async function handler(req, res) {
                 counter++;
             }
 
-            // Create new user
+            if (!username || !password) {
+                return res.status(200).json({
+                    success: true,
+                    signupRequired: true,
+                    googleUser: {
+                        googleId,
+                        email,
+                        name,
+                        picture,
+                        suggestedUsername: uniqueUsername
+                    }
+                });
+            }
+
+            // A custom username and password was provided, validate and complete registration
+            const cleanUsername = username.trim();
+            if (cleanUsername.length < 3) {
+                return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
+            }
+            
+            const existingUsername = await usersCollection.findOne({ username: cleanUsername });
+            if (existingUsername) {
+                return res.status(400).json({ error: 'Username is already taken.' });
+            }
+
+            const cleanPassword = password.trim();
+            if (cleanPassword.length < 8) {
+                return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+            }
+
+            // Create new user with custom credentials
             const newUser = {
-                username: uniqueUsername,
+                username: cleanUsername,
                 email: email.toLowerCase(),
                 googleId,
                 picture,
-                // Random password for Google users (they can't use password login)
-                password: await bcrypt.hash(Math.random().toString(36), 10),
+                password: await bcrypt.hash(cleanPassword, 10),
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
 
             const result = await usersCollection.insertOne(newUser);
             user = { _id: result.insertedId, ...newUser };
-            console.log('New Google user created:', user.username);
+            console.log('New Google user created with custom credentials:', user.username);
         }
 
         // Generate JWT

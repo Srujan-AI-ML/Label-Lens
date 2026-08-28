@@ -112,7 +112,7 @@ UNIT SALE PRICE: Rs. 0.60 / g`;
 
         if (isPlaceholder) {
             console.log('Google Cloud Vision credentials not set in production backend. Emulating mock OCR response.');
-            return res.status(200).json({ text: MOCK_LABEL_TEXT });
+            return res.status(200).json({ text: MOCK_LABEL_TEXT, isMock: true });
         }
 
         const accessToken = await getAccessToken();

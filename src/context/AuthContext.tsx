@@ -14,7 +14,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string) => Promise<void>;
-    loginWithGoogle: (credential: string, setSessionImmediately?: boolean) => Promise<any>;
+    loginWithGoogle: (credential: string, setSessionImmediately?: boolean, username?: string, password?: string) => Promise<any>;
     completeGoogleLogin: (token: string, user: User) => void;
     logout: () => void;
     updatePassword: (password: string) => Promise<void>;
@@ -57,9 +57,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('labellens-user', JSON.stringify(response.user));
     };
 
-    const loginWithGoogle = async (credential: string, setSessionImmediately = true) => {
-        const response = await authAPI.googleLogin(credential);
-        if (setSessionImmediately) {
+    const loginWithGoogle = async (credential: string, setSessionImmediately = true, username?: string, password?: string) => {
+        const response = await authAPI.googleLogin(credential, username, password);
+        if (setSessionImmediately && !response.signupRequired) {
             setToken(response.token);
             setUser(response.user);
             localStorage.setItem('labellens-user', JSON.stringify(response.user));

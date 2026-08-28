@@ -29,7 +29,7 @@ declare global {
 import { setToken, removeToken } from '../services/api';
 
 export const LoginPage: React.FC = () => {
-    const { login, register, loginWithGoogle, completeGoogleLogin, updatePassword } = useAuth();
+    const { login, register, loginWithGoogle, completeGoogleLogin } = useAuth();
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -41,8 +41,10 @@ export const LoginPage: React.FC = () => {
 
     // Google Password Setup States
     const [showPasswordSetup, setShowPasswordSetup] = useState(false);
-    const [tempAuth, setTempAuth] = useState<{ token: string; user: any } | null>(null);
-    const [newGooglePassword, setNewGooglePassword] = useState('');
+    const [tempGoogleCredential, setTempGoogleCredential] = useState('');
+    const [tempGoogleUser, setTempGoogleUser] = useState<{ email: string; picture?: string; suggestedUsername: string } | null>(null);
+    const [customGoogleUsername, setCustomGoogleUsername] = useState('');
+    const [customGooglePassword, setCustomGooglePassword] = useState('');
     const [setupError, setSetupError] = useState('');
     const [setupLoading, setSetupLoading] = useState(false);
 
@@ -99,10 +101,12 @@ export const LoginPage: React.FC = () => {
         try {
             // Call loginWithGoogle but defer session state if it's a new signup
             const res = await loginWithGoogle(response.credential, false);
-            if (res && res.isNew) {
-                setTempAuth({ token: res.token, user: res.user });
+            if (res && res.signupRequired) {
+                setTempGoogleCredential(response.credential);
+                setTempGoogleUser(res.googleUser);
+                setCustomGoogleUsername(res.googleUser.suggestedUsername);
                 setShowPasswordSetup(true);
-            } else {
+            } else if (res && res.token && res.user) {
                 // Existing user, log in immediately
                 completeGoogleLogin(res.token, res.user);
             }
@@ -117,38 +121,35 @@ export const LoginPage: React.FC = () => {
         e.preventDefault();
         setSetupError('');
 
-        if (newGooglePassword.length < 8) {
+        const cleanUsername = customGoogleUsername.trim();
+        if (cleanUsername.length < 3) {
+            setSetupError('Username must be at least 3 characters long.');
+            return;
+        }
+
+        if (customGooglePassword.length < 8) {
             setSetupError('Password must be at least 8 characters long.');
             return;
         }
-        if (!/[A-Z]/.test(newGooglePassword)) {
+        if (!/[A-Z]/.test(customGooglePassword)) {
             setSetupError('Password must contain at least one uppercase letter (A–Z).');
             return;
         }
-        if (!/[0-9]/.test(newGooglePassword)) {
+        if (!/[0-9]/.test(customGooglePassword)) {
             setSetupError('Password must contain at least one digit (0–9).');
             return;
         }
 
         setSetupLoading(true);
         try {
-            // Temporarily set token in API headers so we can update the password on backend
-            setToken(tempAuth!.token);
-            await updatePassword(newGooglePassword);
-            
-            // Success, fully establish authenticated session
-            completeGoogleLogin(tempAuth!.token, tempAuth!.user);
+            const res = await loginWithGoogle(tempGoogleCredential, true, cleanUsername, customGooglePassword);
+            if (res && res.token && res.user) {
+                completeGoogleLogin(res.token, res.user);
+            }
         } catch (err) {
-            removeToken();
-            setSetupError(err instanceof Error ? err.message : 'Failed to set password');
+            setSetupError(err instanceof Error ? err.message : 'Failed to complete registration');
         } finally {
             setSetupLoading(false);
-        }
-    };
-
-    const handleSkipPasswordSetup = () => {
-        if (tempAuth) {
-            completeGoogleLogin(tempAuth.token, tempAuth.user);
         }
     };
 
@@ -193,7 +194,7 @@ export const LoginPage: React.FC = () => {
                 <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-sky-200 dark:bg-sky-900/20 rounded-full blur-3xl opacity-50" />
             </div>
 
-            {showPasswordSetup && tempAuth ? (
+            {showPasswordSetup && tempGoogleUser ? (
                 <div className="relative w-full max-w-md page-transition">
                     {/* Logo Header */}
                     <div className="text-center mb-8">
@@ -204,22 +205,22 @@ export const LoginPage: React.FC = () => {
                             Label <span className="text-blue-600">Lens</span>
                         </h1>
                         <p className="text-gray-500 dark:text-gray-400 mt-2">
-                            Choose your account password
+                            Set up your account credentials
                         </p>
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 space-y-6">
                         <div className="text-center">
-                            {tempAuth.user.picture && (
+                            {tempGoogleUser.picture && (
                                 <img 
-                                    src={tempAuth.user.picture} 
+                                    src={tempGoogleUser.picture} 
                                     alt="Google Profile" 
                                     className="w-16 h-16 rounded-full mx-auto border-2 border-blue-500 shadow-md mb-3"
                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                 />
                             )}
-                            <p className="font-bold text-gray-850 dark:text-gray-100">Welcome, {tempAuth.user.username}!</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{tempAuth.user.email}</p>
+                            <p className="font-bold text-gray-850 dark:text-gray-100">Welcome to Label Lens!</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{tempGoogleUser.email}</p>
                         </div>
 
                         {setupError && (
@@ -231,7 +232,27 @@ export const LoginPage: React.FC = () => {
                         <form onSubmit={handlePasswordSetupSubmit} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                    Create Password *
+                                    Desired Username *
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                        <User size={20} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={customGoogleUsername}
+                                        onChange={(e) => setCustomGoogleUsername(e.target.value)}
+                                        className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors text-sm"
+                                        placeholder="Choose a username"
+                                        required
+                                        minLength={3}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Desired Password *
                                 </label>
                                 <div className="relative">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -239,8 +260,8 @@ export const LoginPage: React.FC = () => {
                                     </div>
                                     <input
                                         type={showPassword ? 'text' : 'password'}
-                                        value={newGooglePassword}
-                                        onChange={(e) => setNewGooglePassword(e.target.value)}
+                                        value={customGooglePassword}
+                                        onChange={(e) => setCustomGooglePassword(e.target.value)}
                                         className="w-full pl-12 pr-12 py-3.5 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors text-sm"
                                         placeholder="Create a strong password"
                                         required
@@ -256,13 +277,13 @@ export const LoginPage: React.FC = () => {
                                 </div>
 
                                 {/* Password requirements */}
-                                {newGooglePassword.length > 0 && (
+                                {customGooglePassword.length > 0 && (
                                     <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-1.5">
                                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Password requirements:</p>
                                         {([
-                                            { check: newGooglePassword.length >= 8, label: 'At least 8 characters' },
-                                            { check: /[A-Z]/.test(newGooglePassword), label: 'At least 1 uppercase letter (A–Z)' },
-                                            { check: /[0-9]/.test(newGooglePassword), label: 'At least 1 digit (0–9)' },
+                                            { check: customGooglePassword.length >= 8, label: 'At least 8 characters' },
+                                            { check: /[A-Z]/.test(customGooglePassword), label: 'At least 1 uppercase letter (A–Z)' },
+                                            { check: /[0-9]/.test(customGooglePassword), label: 'At least 1 digit (0–9)' },
                                         ]).map(({ check, label }) => (
                                             <div key={label} className={`flex items-center gap-2 text-xs font-medium transition-colors ${
                                                 check ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
@@ -282,16 +303,7 @@ export const LoginPage: React.FC = () => {
                                 disabled={setupLoading}
                                 className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                             >
-                                {setupLoading ? <Loader size={20} className="animate-spin" /> : 'Complete Setup'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleSkipPasswordSetup}
-                                disabled={setupLoading}
-                                className="w-full py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-xl transition-all text-xs cursor-pointer"
-                            >
-                                Skip & Login (Use Google Only)
+                                {setupLoading ? <Loader size={20} className="animate-spin" /> : 'Complete Setup & Login'}
                             </button>
                         </form>
                     </div>
