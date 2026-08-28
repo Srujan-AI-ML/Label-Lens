@@ -1,4 +1,4 @@
-// Secure Server-Side Google Cloud Vision OCR Proxy Function
+// Secure Server-Side Google Cloud Vision and Gemini API OCR Proxy Function
 import jwt from 'jsonwebtoken';
 import { authenticateRequest } from '../lib/auth.js';
 
@@ -16,6 +16,8 @@ const SERVICE_ACCOUNT = {
     private_key: parsePrivateKey(process.env.GOOGLE_CLOUD_PRIVATE_KEY || process.env.VITE_GOOGLE_CLOUD_PRIVATE_KEY || ''),
     token_uri: "https://oauth2.googleapis.com/token"
 };
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 
 let cachedToken = null;
 
@@ -64,6 +66,49 @@ async function getAccessToken() {
     return cachedToken.token;
 }
 
+function getCleanBase64(base64Str) {
+    if (base64Str.startsWith('data:')) {
+        const parts = base64Str.split(';base64,');
+        return parts[1] || base64Str;
+    }
+    return base64Str;
+}
+
+async function extractTextUsingGemini(base64Image, apiKey) {
+    const cleanBase64 = getCleanBase64(base64Image);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [
+                    {
+                        text: "You are an expert product label reader. Please extract all the text visible on this product packaging label. Focus on capturing details like: brand/product name, net quantity/weight, price/MRP (specifically keeping any Indian Rupee ₹ symbols intact), dates (MFG, EXP, Best Before), FSSAI license numbers, barcodes, manufacturer details, and consumer care info. Print the text line-by-line as it appears on the label."
+                    },
+                    {
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: cleanBase64
+                        }
+                    }
+                ]
+            }]
+        })
+    });
+
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return text;
+}
+
 export default async function handler(req, res) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -91,46 +136,67 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Image base64 content is required' });
         }
 
-        const isPlaceholder = !SERVICE_ACCOUNT.client_email || 
-            SERVICE_ACCOUNT.client_email.includes('your-service-account') || 
-            !SERVICE_ACCOUNT.private_key || 
-            SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY_HERE');
+        // Try Google Cloud Vision first if configured
+        const isVisionConfigured = SERVICE_ACCOUNT.client_email && 
+            !SERVICE_ACCOUNT.client_email.includes('your-service-account') && 
+            SERVICE_ACCOUNT.private_key && 
+            !SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY_HERE');
 
-        if (isPlaceholder) {
-            console.log('Google Cloud Vision credentials are not set in production backend.');
-            return res.status(200).json({ text: '', isMock: true, error: 'Google Cloud Vision API credentials are not configured on the server side.' });
+        if (isVisionConfigured) {
+            try {
+                console.log('Running Google Cloud Vision API on backend...');
+                const accessToken = await getAccessToken();
+
+                const googleResponse = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        requests: [{
+                            image: { content: image },
+                            features: [
+                                { type: 'DOCUMENT_TEXT_DETECTION' },
+                                { type: 'TEXT_DETECTION' }
+                            ]
+                        }]
+                    })
+                });
+
+                const data = await googleResponse.json();
+
+                if (!data.error) {
+                    const responses = data.responses?.[0];
+                    const extractedText = responses?.fullTextAnnotation?.text || responses?.textAnnotations?.[0]?.description || '';
+                    if (extractedText && extractedText.trim()) {
+                        console.log('✅ Google Cloud Vision API scan success');
+                        return res.status(200).json({ text: extractedText });
+                    }
+                } else {
+                    console.warn('Google Vision API reported error, trying Gemini fallback:', data.error);
+                }
+            } catch (visionErr) {
+                console.warn('Google Vision API path failed, attempting Gemini API fallback:', visionErr.message);
+            }
         }
 
-        const accessToken = await getAccessToken();
+        // Fallback to Google Gemini API
+        if (GEMINI_API_KEY) {
+            try {
+                console.log('Running Google Gemini Vision API on backend...');
+                const extractedText = await extractTextUsingGemini(image, GEMINI_API_KEY);
+                console.log('✅ Google Gemini Vision API scan success');
+                return res.status(200).json({ text: extractedText });
+            } catch (geminiErr) {
+                console.error('Google Gemini API failed:', geminiErr.message);
+                return res.status(500).json({ error: 'OCR processing failed', details: geminiErr.message });
+            }
+        }
 
-        const googleResponse = await fetch('https://vision.googleapis.com/v1/images:annotate', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                requests: [{
-                    image: { content: image },
-                    features: [
-                        { type: 'DOCUMENT_TEXT_DETECTION' },
-                        { type: 'TEXT_DETECTION' }
-                    ]
-                }]
-            })
+        return res.status(400).json({ 
+            error: 'Google Cloud Vision and Gemini API credentials are not configured on the server side.' 
         });
-
-        const data = await googleResponse.json();
-
-        if (data.error) {
-            console.error('Google Vision API Error:', data.error);
-            return res.status(500).json({ error: 'Google Vision API failed', details: data.error });
-        }
-
-        const responses = data.responses?.[0];
-        const extractedText = responses?.fullTextAnnotation?.text || responses?.textAnnotations?.[0]?.description || '';
-
-        return res.status(200).json({ text: extractedText });
 
     } catch (error) {
         console.error('Vision proxy handler error:', error);
