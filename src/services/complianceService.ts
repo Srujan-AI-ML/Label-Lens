@@ -33,154 +33,192 @@ function firstMatch(text: string, patterns: RegExp[]): string | null {
 // ---- Declaration Extractors ---------------------------------
 
 function extractGenericName(text: string): ComplianceDeclaration {
-  // Common product type words appearing in labels
-  const patterns = [
-    /(?:product|commodity|item|type)\s*[:\-]?\s*([A-Za-z ]{3,40})/i,
-    /^([A-Z][A-Z ]{2,30})$/m,  // ALL CAPS heading line
-  ];
-  const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value, 'medium');
+  // 1. Check for explicit product/item label
+  const explicitPattern = /(?:product(?:\s*name)?|commodity|item(?:\s*name)?|product\s*identity|common\s*name)\s*[:\-]\s*([^\n\r]{3,60})/i;
+  const expMatch = text.match(explicitPattern);
+  if (expMatch && expMatch[1]) {
+    const clean = expMatch[1].trim();
+    if (clean.length > 2) return makeDeclaration(true, clean, 'high');
+  }
 
-  // Heuristic: first significant title line
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2 && l.length < 60);
-  if (lines.length > 0) return makeDeclaration(true, lines[0], 'low');
-  return makeDeclaration(false, null);
+  // 2. Filter lines to find clean product title candidates
+  const ignoredPatterns = [
+    /^(?:manufactured|mfd|packed|marketed|imported|distributed|mfr|pvt|ltd|limited|inc|llc|corp)\b/i,
+    /^(?:nutrition|ingredients|mrp|rs\.|₹|net\s*wt|net\s*qty|net\s*quantity|batch|lot|fssai|lic|licence|license)\b/i,
+    /^(?:consumer|care|helpline|customer|feedback|complaint|email|phone|tel|call)\b/i,
+    /^(?:best\s*before|use\s*by|mfg|pkd|packed|expiry|exp|date)\b/i,
+    /^(?:country\s*of\s*origin|made\s*in|product\s*of|origin)\b/i,
+    /^(?:store\s*in|keep\s*in|storage|directions|instructions|warning|allergen|contains|table|per\s*100|serving)\b/i,
+    /^(?:veg|non-veg|green\s*dot|100%|rules|2011)\b/i,
+    /^[\d\W_]+$/
+  ];
+
+  const lines = text.split(/[\r\n]+/)
+    .map(l => l.trim())
+    .filter(l => l.length >= 3 && l.length <= 60 && !ignoredPatterns.some(p => p.test(l)));
+
+  if (lines.length > 0) {
+    if (lines.length >= 2 && lines[0].length < 25 && lines[1].length < 35 && !lines[0].includes(':') && !lines[1].includes(':')) {
+      const combined = `${lines[0]} ${lines[1]}`.trim();
+      return makeDeclaration(true, combined, 'medium');
+    }
+    return makeDeclaration(true, lines[0], 'medium');
+  }
+
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractManufacturer(text: string): ComplianceDeclaration {
-  const patterns = [
-    /(?:manufactured|mfd|packed|marketed|imported|distributed|dist)\s+by\s*[:\-]?\s*([^\n]{5,120})/i,
-    /(?:manufacturer|packer|importer|distributor)\s*[:\-]\s*([^\n]{5,120})/i,
-    /(?:mfr|mfg)\s*[:\-]\s*([^\n]{5,120})/i,
-  ];
-  const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-  return makeDeclaration(false, null);
+  const pattern = /(?:manufactured\s*(?:&|and)?\s*packed\s*by|manufactured\s*by|mfd\.?\s*by|packed\s*by|marketed\s*by|imported\s*by|distributed\s*by|dist\.?\s*by|manufacturer\s*address|packer\s*address|manufacturer|packer|importer)\s*[:\-]?\s*([^\n\r]+(?:\n[^\n\r]+){0,3})/i;
+  const match = text.match(pattern);
+  if (match && match[1]) {
+    let block = match[1].trim();
+    const stopKeywords = [
+      /\b(?:net\s*(?:qty|wt|weight|quantity)|mrp|m\.r\.p|fssai|lic\.?\s*no|consumer\s*care|helpline|best\s*before|use\s*by|mfg\s*date|date\s*of|pkd|batch|for\s*feedback|customer\s*care|email|phone|country\s*of\s*origin|unit\s*sale)\b/i
+    ];
+    for (const kw of stopKeywords) {
+      const idx = block.search(kw);
+      if (idx > 0) {
+        block = block.substring(0, idx).trim();
+      }
+    }
+    const cleaned = block.replace(/[\r\n]+/g, ', ').replace(/\s*,\s*/g, ', ').replace(/,+$/, '').trim();
+    if (cleaned.length >= 5) {
+      return makeDeclaration(true, cleaned, 'high');
+    }
+  }
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractNetQuantity(text: string): ComplianceDeclaration {
-  const patterns = [
-    /(?:net\s*(?:qty|quantity|wt|weight|vol|volume|content))\s*[:\-]?\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pieces?|pcs?|nos?|number|unit|pack|oz|ounce|lbs?|pound))/i,
-    /(?:net)\s*([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?|oz|lbs?))\b/i,
-    /([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs?|nos?|oz|lbs?))\s*net/i,
-    // standalone unit pattern
-    /\b([\d.,]+\s*(?:kg|gm|gms|ml|ltr|litre|pcs|nos|oz|lbs?))\b/i,
-  ];
-  const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-  return makeDeclaration(false, null);
+  const explicit = /(?:net\s*(?:qty|quantity|wt|weight|vol|volume|content|contents)|quantity|weight|volume)\s*[:\-]?\s*([\d.,]+\s*(?:kg|g|gm|gms|gram|grams|mg|l|lt|ltr|litre|litres|ml|pieces?|pcs?|nos?|number|units?|count))\b/i;
+  const match = text.match(explicit);
+  if (match && match[1]) {
+    return makeDeclaration(true, match[1].trim(), 'high');
+  }
+
+  const lines = text.split(/[\r\n]+/).map(l => l.trim());
+  const nutritionalWords = /energy|protein|fat|sugar|carbohydrate|sodium|per\s*100|serving|nutrient/i;
+  for (const line of lines) {
+    if (nutritionalWords.test(line)) continue;
+    const standalone = /\b([\d.,]+\s*(?:kg|g|gm|gms|mg|l|lt|ltr|litre|ml|pcs|units))\b/i;
+    const m = line.match(standalone);
+    if (m && m[1]) {
+      return makeDeclaration(true, m[1].trim(), 'medium');
+    }
+  }
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractManufactureDate(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:mfg|mfd|manufactured|packing|packed|mfg\.?\s*date|manufacture\s*date)\s*[:\-]?\s*(\d{4}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{1,2}|\d{1,2}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{2,4}|\d{1,2}[\s\/\-\.]\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i,
-    /mfg\s*[:\-]?\s*(\d{4}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-  ];
-  const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-  return makeDeclaration(false, null);
-}
-
-function extractMRP(text: string): ComplianceDeclaration {
-  const patterns = [
-    /(?:m\.?r\.?p\.?|maximum\s+retail\s+price)\s*[:\-\(]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /(?:rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|mrp)/i,
-    /(?:price|rate)\s*[:\-]?\s*(?:rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /mrp\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:mfg(?:\.|\s*date)?|mfd(?:\.|\s*date)?|manufacture\s*date|date\s*of\s*mfg|date\s*of\s*manufacture|date\s*of\s*packing|packing\s*date|packed\s*on|pkd|packed|dom)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,20})/i,
+    /\b(?:mfg|mfd|pkd)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i
   ];
   const value = firstMatch(text, patterns);
   if (value) {
-    // Format as ₹ amount
-    const cleaned = value.replace(/[^\d.,]/g, '');
-    return makeDeclaration(true, `₹${cleaned}`, 'high');
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i);
+    if (dateMatch) {
+      return makeDeclaration(true, dateMatch[0].trim(), 'high');
+    }
+    return makeDeclaration(true, value.trim(), 'medium');
   }
-  return makeDeclaration(false, null);
-}
-
-function extractConsumerCare(text: string): ComplianceDeclaration {
-  const phonePattern = /(?:consumer\s*care|helpline|toll.?free|customer\s*care|complaint)[^\n]*\n?[^\n]*([\d\-\+\(\)\s]{7,15})/i;
-  const emailPattern = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
-  const standalonePhone = /(?<!\d)(\+91[-\s]?)?[6-9]\d{9}(?!\d)/;
-
-  const phoneMatch = text.match(phonePattern) || text.match(standalonePhone);
-  const emailMatch = text.match(emailPattern);
-
-  if (phoneMatch || emailMatch) {
-    const val = [
-      phoneMatch ? phoneMatch[0].trim() : null,
-      emailMatch ? emailMatch[0] : null,
-    ]
-      .filter(Boolean)
-      .join(', ');
-    return makeDeclaration(true, val, 'high');
-  }
-  // Check for "consumer care" text without number — partial
-  if (/consumer\s*care|helpline/i.test(text)) {
-    return makeDeclaration(true, 'Consumer care section found (no number extracted)', 'low');
-  }
-  return makeDeclaration(false, null);
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractBestBefore(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:best\s*b[e|o]?fore?|use\s*by?|exp(?:ir[y|e])?|exp\.?|bbe|best\s*before\s*end|bst\s*before?)\s*[:\-]?\s*(\d{4}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{1,2}|\d{1,2}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{2,4}|\d{1,2}[\s\/\-\.]\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4})/i,
-    /(?:exp(?:ir[y|e])?|exp)\s*[:\-]?\s*(\d{4}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /(?:best\s*b[e|o]?fore?|use\s*by|expiry\s*date|exp\.?\s*date|expiry|bbe|best\s*by|use\s*before|valid\s*up\s*to)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
+    /\b(?:exp|expiry)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /(?:best\s*before\s*([0-9]+\s*(?:months?|days?|years?|weeks?)(?:\s*from\s*(?:mfg|mfd|pkd|packing|manufacture|date))?))/i
   ];
   const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-
-  // "shelf life" mention — partial
-  if (/shelf\s*life/i.test(text)) {
-    return makeDeclaration(true, 'Shelf life mentioned', 'medium');
+  if (value) {
+    const dateMatch = value.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\/\-,.]*\d{2,4}|\d+\s*months?)/i);
+    if (dateMatch) {
+      return makeDeclaration(true, dateMatch[0].trim(), 'high');
+    }
+    return makeDeclaration(true, value.trim(), 'medium');
   }
-  return makeDeclaration(false, null);
+  return makeDeclaration(false, null, 'low');
+}
+
+function extractMRP(text: string): ComplianceDeclaration {
+  const patterns = [
+    /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|retail\s*price)\s*[:\-\(]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|inclusive|incl)/i,
+    /mrp\s*[:\-\s]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i
+  ];
+  const value = firstMatch(text, patterns);
+  if (value) {
+    const num = value.replace(/[^\d.,]/g, '');
+    return makeDeclaration(true, `₹${num}`, 'high');
+  }
+  return makeDeclaration(false, null, 'low');
+}
+
+function extractConsumerCare(text: string): ComplianceDeclaration {
+  const careSectionPattern = /(?:consumer\s*care|helpline|customer\s*care|feedback|complaint|customer\s*support)[^\n\r]*[\r\n]?[^\n\r]*/i;
+  const section = text.match(careSectionPattern);
+  const targetText = section ? section[0] : text;
+
+  const phonePattern = /(?:toll\s*free\s*[:\-]?\s*)?(?:1800[-\s]?\d{2,3}[-\s]?\d{4,5}|1800\d{6,7}|(?:\+91[-\s]?)?[6-9]\d{9}|\d{3,4}[-\s]\d{7,8})/;
+  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+
+  const phoneMatch = targetText.match(phonePattern) || text.match(phonePattern);
+  const emailMatch = targetText.match(emailPattern) || text.match(emailPattern);
+
+  if (phoneMatch || emailMatch) {
+    const parts = [
+      phoneMatch ? phoneMatch[0].trim() : null,
+      emailMatch ? emailMatch[0].trim() : null
+    ].filter(Boolean);
+    return makeDeclaration(true, parts.join(' / '), 'high');
+  }
+  return makeDeclaration(false, null, 'low');
+}
+
+function extractFSSAI(text: string): ComplianceDeclaration {
+  const pattern = /(?:fssai(?:[^\d\n\r]{0,20})|lic\.?\s*(?:no\.?)?(?:[^\d\n\r]{0,10}))(\d{14})/i;
+  const m = text.match(pattern);
+  if (m && m[1]) {
+    return makeDeclaration(true, m[1].trim(), 'high');
+  }
+  const standalone = /\b(100\d{11}|200\d{11}|115\d{11}|124\d{11})\b/;
+  const m2 = text.match(standalone);
+  if (m2 && m2[1]) {
+    return makeDeclaration(true, m2[1].trim(), 'medium');
+  }
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractCountryOfOrigin(text: string): ComplianceDeclaration {
   const patterns = [
     /(?:country\s*of\s*origin|made\s*in|product\s*of|manufactured\s*in)\s*[:\-]?\s*([A-Za-z ]{3,30})/i,
-    /(?:origin)\s*[:\-]\s*([A-Za-z ]{3,20})/i,
+    /(?:origin)\s*[:\-]\s*([A-Za-z ]{3,20})/i
   ];
   const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-
-  // "India" appearing alone is common on domestic products
+  if (value) {
+    const clean = value.replace(/\(inferred\)/i, '').trim();
+    return makeDeclaration(true, clean, 'high');
+  }
   if (/\bindia\b/i.test(text)) {
-    return makeDeclaration(true, 'India (inferred)', 'low');
+    return makeDeclaration(true, 'India', 'medium');
   }
-  return makeDeclaration(false, null, 'medium'); // Not always mandatory
-}
-
-function extractFSSAI(text: string): ComplianceDeclaration {
-  const patterns = [
-    /(?:fssai|food\s*safety|lic\.?\s*no\.?|licence\s*no\.?|license\s*no\.?)\s*[:\-]?\s*(\d{14})/i,
-    /\b(\d{14})\b/, // standalone 14-digit number
-  ];
-  const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-
-  // FSSAI mention without number
-  if (/fssai/i.test(text)) {
-    return makeDeclaration(true, 'FSSAI mentioned (license number not extracted)', 'low');
-  }
-  return makeDeclaration(false, null);
+  return makeDeclaration(false, null, 'low');
 }
 
 function extractRetailSalePrice(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:retail\s*(?:sale\s*)?price|rsp|unit\s*price)\s*[:\-]?\s*(?:rs\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /(?:rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:per\s*(?:unit|piece|pc|no))/i,
-    /(?:inclusive|incl\.?)\s*of\s*(?:all\s*)?tax/i,
+    /(?:unit\s*(?:sale\s*)?price|usp|unit\s*price)\s*[:\-]?\s*([^\n\r]{3,30})/i,
+    /((?:rs\.?|₹)\s*[\d,]+(?:\.\d{1,2})?\s*\/\s*(?:g|gm|kg|ml|l|unit|piece|pc|no))/i,
+    /(?:inclusive|incl\.?)\s*of\s*(?:all\s*)?tax/i
   ];
   const value = firstMatch(text, patterns);
-  if (value) return makeDeclaration(true, value.trim(), 'high');
-
-  // If MRP is present with "inclusive of all taxes", this is satisfied
-  if (/incl(?:usive)?\s*of\s*(?:all\s*)?tax/i.test(text) || /all\s*taxes?\s*incl/i.test(text)) {
-    return makeDeclaration(true, 'MRP inclusive of all taxes (inferred)', 'medium');
+  if (value) {
+    return makeDeclaration(true, value.trim(), 'high');
   }
-
-  return makeDeclaration(false, null);
+  return makeDeclaration(false, null, 'low');
 }
 
 // ---- Main Compliance Analyser -------------------------------
@@ -209,7 +247,7 @@ export function analyseCompliance(
     retailSalePrice: extractRetailSalePrice(text),
   };
 
-  if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim()) {
+  if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim() && productName !== 'Could not identify product') {
     declarations.genericName = makeDeclaration(true, productName.trim(), 'high');
   }
 

@@ -120,7 +120,19 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             return `${year}-${month}-01`;
         }
 
-        // 4. Try parsing with standard Date object
+        // 4. If month name format e.g. "JAN 2026", "MAY-2026", "15 MAY 2026"
+        const monthNames: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+        const monthNameMatch = cleanStr.match(/(?:(\d{1,2})[\s\.\/\-]*)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\.\/\-]*(\d{2,4})/i);
+        if (monthNameMatch) {
+            const day = monthNameMatch[1] ? monthNameMatch[1].padStart(2, '0') : '01';
+            const monKey = monthNameMatch[2].toLowerCase().slice(0, 3);
+            const month = monthNames[monKey] || '01';
+            let year = monthNameMatch[3];
+            if (year.length === 2) year = '20' + year;
+            return `${year}-${month}-${day}`;
+        }
+
+        // 5. Try parsing with standard Date object
         const parsed = new Date(cleanStr);
         if (!isNaN(parsed.getTime())) {
             const year = parsed.getFullYear();
@@ -132,13 +144,16 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         return '';
     };
 
-    const autoPopulateFromText = (extractedText: string) => {
-        const analysis = analyseCompliance(extractedText, productName);
+    const autoPopulateFromText = (extractedText: string, currentName: string = '', currentBarcode: string = '') => {
+        const analysis = analyseCompliance(extractedText, currentName);
         const decs = analysis.declarations;
 
         if (decs.genericName?.present && decs.genericName.value) {
             setProductName(decs.genericName.value);
+        } else if (currentName) {
+            setProductName(currentName);
         }
+
         if (decs.netQuantity?.present && decs.netQuantity.value) {
             const qtyMatch = decs.netQuantity.value.match(/([\d.,]+)\s*([a-zA-Z]+)/);
             if (qtyMatch) {
@@ -184,60 +199,72 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         }
 
         // Fallback barcode detection from extracted text
-        if (!barcode.trim() || barcode.trim() === '') {
+        if (!currentBarcode.trim()) {
             const barcodeRegex = /(?:barcode|gtin|upc|ean)\s*[:\-]?\s*(\d{8,15})/i;
             const match = extractedText.match(barcodeRegex);
             if (match) {
                 setBarcode(match[1].trim());
-            } else {
-                const cleanText = extractedText.replace(/\s+/g, '');
-                const standaloneMatch = cleanText.match(/(\d{8,15})/);
-                if (standaloneMatch) {
-                    setBarcode(standaloneMatch[1]);
-                }
             }
         }
     };
 
     const processUploadedImage = async (imageSrc: string) => {
+        // Reset specific fields before scanning
+        setProductName('');
+        setBarcode('');
+        setNetQuantity('');
+        setMrp('');
+        setMfgDate('');
+        setExpiryDate('');
+        setManufacturer('');
+        setConsumerCare('');
+        setFssaiLicense('');
+        setCountryOfOrigin('India');
+        setUnitPrice('');
+        setNotes('');
+        setRawText('');
+
         setIsProcessing(true);
         setStatusMsg('Scanning image and reading packaging declarations...');
         const base64Data = imageSrc.split(',')[1];
 
+        let detectedBarcode = '';
+        let detectedName = '';
+
         try {
-            // 1. Detect Barcode
-            const bcode = await detectBarcode(base64Data);
+            // Step 1: OCR Text Extraction
+            setStatusMsg('Extracting packaging text via OCR...');
+            const text = await extractTextFromImage(base64Data);
+            console.log('Modal Scan Raw OCR Output:\n', text);
+
+            // Step 2: Barcode Detection
+            const bcode = await detectBarcode(base64Data, text || undefined);
             if (bcode) {
+                detectedBarcode = bcode;
                 setBarcode(bcode);
                 setStatusMsg(`Barcode detected: ${bcode}. Querying product registry...`);
                 const info = await lookupProduct(bcode);
                 if (info && info.name) {
+                    detectedName = info.name;
                     setProductName(info.name);
                 }
             }
 
-            // 2. OCR Text Extraction
-            setStatusMsg('Extracting text via Optical Character Recognition (OCR)...');
-            try {
-                const text = await extractTextFromImage(base64Data);
-                if (text) {
-                    setRawText(text);
-                    autoPopulateFromText(text);
-                    setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
+            if (text && text.trim()) {
+                setRawText(text);
+                autoPopulateFromText(text, detectedName, detectedBarcode);
+                setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
 
-                    // Determine if any critical fields are missing
-                    const analysis = analyseCompliance(text, productName);
-                    const missingKeys = Object.entries(analysis.declarations)
-                        .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
-                    
-                    if (missingKeys.length > 0) {
-                        alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
-                    }
+                // Determine if any critical fields are missing
+                const analysis = analyseCompliance(text, detectedName);
+                const missingKeys = Object.entries(analysis.declarations)
+                    .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
+                
+                if (missingKeys.length > 0) {
+                    alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
                 }
-            } catch (ocrErr: any) {
-                console.warn('OCR fallback:', ocrErr);
-                setStatusMsg('Image uploaded. Please fill/verify the specifics in the grid below.');
-                alert('⚠️ Specific details failed to scan. Please update manually.');
+            } else {
+                setStatusMsg('⚠️ Image attached. No clear text could be detected. Please fill specifics manually.');
             }
         } catch (err: any) {
             console.error('Scan processing error:', err);

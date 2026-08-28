@@ -91,28 +91,9 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Image base64 content is required' });
         }
 
-        // Mock data fallback if credentials are placeholders
-        const isPlaceholder = 
-            !SERVICE_ACCOUNT.client_email || 
-            !SERVICE_ACCOUNT.private_key ||
-            SERVICE_ACCOUNT.client_email.includes('your-service-account') ||
-            SERVICE_ACCOUNT.private_key.includes('YOUR_PRIVATE_KEY');
-
-        const MOCK_LABEL_TEXT = `PRODUCT: Premium Butter Cookies
-BARCODE: 8901058005080
-MANUFACTURED BY: Britannia Industries Ltd, 5/1A Hungerford Street, Kolkata - 700017
-NET QUANTITY: 250 g
-MRP: Rs. 150.00 (incl. of all taxes)
-MFG DATE: 08/2026
-BEST BEFORE: 12/2026
-CONSUMER CARE: 1800-425-2555 / cs@britannia.co.in
-FSSAI LIC NO: 10015031001425
-COUNTRY OF ORIGIN: India
-UNIT SALE PRICE: Rs. 0.60 / g`;
-
         if (isPlaceholder) {
-            console.log('Google Cloud Vision credentials not set in production backend. Emulating mock OCR response.');
-            return res.status(200).json({ text: MOCK_LABEL_TEXT, isMock: true });
+            console.log('Google Cloud Vision credentials not set in production backend. Returning empty text for client local OCR fallback.');
+            return res.status(200).json({ text: '', isMock: true });
         }
 
         const accessToken = await getAccessToken();

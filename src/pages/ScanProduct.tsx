@@ -39,7 +39,19 @@ function formatToISODate(dateStr: string): string {
         return `${year}-${month}-01`;
     }
 
-    // 4. Try parsing with standard Date object
+    // 4. If month name format e.g. "JAN 2026", "MAY-2026", "15 MAY 2026"
+    const monthNames: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+    const monthNameMatch = cleanStr.match(/(?:(\d{1,2})[\s\.\/\-]*)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\.\/\-]*(\d{2,4})/i);
+    if (monthNameMatch) {
+        const day = monthNameMatch[1] ? monthNameMatch[1].padStart(2, '0') : '01';
+        const monKey = monthNameMatch[2].toLowerCase().slice(0, 3);
+        const month = monthNames[monKey] || '01';
+        let year = monthNameMatch[3];
+        if (year.length === 2) year = '20' + year;
+        return `${year}-${month}-${day}`;
+    }
+
+    // 5. Try parsing with standard Date object
     const parsed = new Date(cleanStr);
     if (!isNaN(parsed.getTime())) {
         const year = parsed.getFullYear();
@@ -123,12 +135,16 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         reader.readAsDataURL(file);
     };
 
-    const autoPopulateFromText = (extractedText: string) => {
-        const analysis = analyseCompliance(extractedText, productName);
+    const autoPopulateFromText = (extractedText: string, currentName: string = '', currentBarcode: string = '') => {
+        const analysis = analyseCompliance(extractedText, currentName);
         const decs = analysis.declarations;
 
         if (decs.genericName?.present && decs.genericName.value) {
             setProductName(decs.genericName.value);
+        } else if (currentName) {
+            setProductName(currentName);
+        } else {
+            setProductName('Could not identify product');
         }
         if (decs.netQuantity?.present && decs.netQuantity.value) {
             const qtyMatch = decs.netQuantity.value.match(/([\d.,]+)\s*([a-zA-Z]+)/);
@@ -175,7 +191,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         }
 
         // Fallback barcode detection from extracted text
-        if (!barcode.trim() || barcode.trim() === '') {
+        if (!currentBarcode.trim() || currentBarcode.trim() === '') {
             const barcodeRegex = /(?:barcode|gtin|upc|ean)\s*[:\-]?\s*(\d{8,15})/i;
             const match = extractedText.match(barcodeRegex);
             if (match) {
@@ -191,18 +207,38 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     };
 
     const processLabelImage = async (imageSrc: string) => {
+        // Reset all product fields before starting a new scan
+        setProductName('');
+        setBarcode('');
+        setNetQuantity('');
+        setMrp('');
+        setMfgDate('');
+        setExpiryDate('');
+        setManufacturer('');
+        setConsumerCare('');
+        setFssaiLicense('');
+        setCountryOfOrigin('India');
+        setUnitPrice('');
+        setNotes('');
+        setRawText('');
+
         setIsScanning(true);
         setScanStatus('Analyzing image and reading packaging declarations...');
         const base64Data = imageSrc.split(',')[1];
+
+        let detectedBarcode = '';
+        let detectedName = '';
 
         try {
             // Step 1: Detect Barcode
             const bcode = await detectBarcode(base64Data);
             if (bcode) {
+                detectedBarcode = bcode;
                 setBarcode(bcode);
                 setScanStatus(`Barcode detected: ${bcode}. Checking product registry...`);
                 const info = await lookupProduct(bcode);
                 if (info && info.name) {
+                    detectedName = info.name;
                     setProductName(info.name);
                 }
             }
@@ -211,27 +247,57 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             setScanStatus('Running Optical Character Recognition (OCR)...');
             try {
                 const text = await extractTextFromImage(base64Data);
-                if (text) {
+                console.log('Raw OCR Output from Scan:', text);
+                
+                if (text && text.trim()) {
                     setRawText(text);
-                    autoPopulateFromText(text);
+                    autoPopulateFromText(text, detectedName, detectedBarcode);
                     setScanStatus('✅ Text extracted successfully! Review specifics in grid below.');
 
+                    // Determine final name to use for analysis compliance check
+                    const analysis = analyseCompliance(text, detectedName);
+                    const decs = analysis.declarations;
+                    const finalName = (decs.genericName?.present && decs.genericName.value) || detectedName;
+                    
+                    if (finalName && finalName.trim()) {
+                        setProductName(finalName);
+                    } else {
+                        setProductName('Could not identify product');
+                    }
+
                     // Determine if any critical fields are missing
-                    const analysis = analyseCompliance(text, productName);
                     const missingKeys = Object.entries(analysis.declarations)
                         .filter(([key, d]) => !d.present && ['genericName', 'netQuantity', 'mrp', 'manufactureDate', 'consumerCare'].includes(key));
                     
                     if (missingKeys.length > 0) {
                         alert('⚠️ Some specific details failed to scan and update. Please review and fill them manually.');
                     }
+                } else {
+                    console.log('No text was returned by OCR.');
+                    if (detectedName) {
+                        setProductName(detectedName);
+                    } else {
+                        setProductName('Could not identify product');
+                    }
+                    setScanStatus('⚠️ Image attached, but no text could be extracted.');
                 }
             } catch (ocrError: any) {
                 console.warn('OCR notice:', ocrError);
+                if (detectedName) {
+                    setProductName(detectedName);
+                } else {
+                    setProductName('Could not identify product');
+                }
                 setScanStatus('Image attached. Please review/fill the specifics in the grid below.');
                 alert('⚠️ Specific details failed to scan. Please update manually.');
             }
         } catch (err: any) {
             console.error('Scan processing failed:', err);
+            if (detectedName) {
+                setProductName(detectedName);
+            } else {
+                setProductName('Could not identify product');
+            }
             setScanStatus('Image loaded. You can fill/edit the specifics grid directly.');
             alert('⚠️ Specific details failed to scan. Please update manually.');
         } finally {
