@@ -91,7 +91,9 @@ function AppContent() {
         onNavigate={navigateToPage}
         onOpenAddModal={() => setIsAddModalOpen(true)}
       >
-        {renderPage()}
+        <div key={selectedProduct ? selectedProduct._id || selectedProduct.id : currentPage} className="page-transition">
+          {renderPage()}
+        </div>
       </Layout>
 
       {/* Global Add Product / Scan Modal Popup */}
