@@ -22,13 +22,29 @@ export interface GeminiScanResult {
     product: StructuredProduct;
 }
 
-const getClientEnvKey = (): string => {
+export const saveUserGeminiApiKey = (key: string): void => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('gemini_api_key', key.trim());
+    }
+};
+
+export const getUserGeminiApiKey = (): string => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const stored = window.localStorage.getItem('gemini_api_key') ||
+                       window.localStorage.getItem('GEMINI_API_KEY') ||
+                       window.localStorage.getItem('labellens_gemini_key');
+        if (stored && stored.trim()) return stored.trim();
+    }
     try {
         return (import.meta.env.VITE_GEMINI_API_KEY as string) ||
                (import.meta.env.GEMINI_API_KEY as string) || '';
     } catch {
         return '';
     }
+};
+
+const getClientEnvKey = (): string => {
+    return getUserGeminiApiKey();
 };
 
 async function callGeminiDirectlyFromClient(imagePayload: string, apiKey: string): Promise<GeminiScanResult> {

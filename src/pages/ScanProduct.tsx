@@ -1,12 +1,12 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from '../components/CameraModal';
-import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
+import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini, saveUserGeminiApiKey } from '../services/visionService';
 import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
 import { 
     Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
     Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Save, RotateCcw,
-    ScanLine, X
+    ScanLine, X, Key
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 import type { PageType } from '../App';
@@ -520,9 +520,30 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         )}
 
                         {scanStatus && (
-                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                                <Sparkles size={15} />
-                                <span>{scanStatus}</span>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                    <Sparkles size={15} className="shrink-0" />
+                                    <span>{scanStatus}</span>
+                                </div>
+                                {(scanStatus.includes('failed') || scanStatus.includes('notice') || scanStatus.includes('configured')) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const key = prompt('Please enter your Google Gemini API Key (starts with AIza...):');
+                                            if (key && key.trim()) {
+                                                saveUserGeminiApiKey(key.trim());
+                                                setScanStatus('✅ API Key saved! Re-scanning packaging image...');
+                                                if (imagePreview) {
+                                                    processLabelImage(imagePreview);
+                                                }
+                                            }
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
+                                    >
+                                        <Key size={12} />
+                                        Set Gemini API Key
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
