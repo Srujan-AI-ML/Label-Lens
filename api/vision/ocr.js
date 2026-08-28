@@ -1,7 +1,10 @@
 // Serverless Endpoint for Google Gemini API Multimodal Product Scanning
 import { authenticateRequest } from '../lib/auth.js';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 
+                       process.env.GOOGLE_GEMINI_API_KEY || 
+                       process.env.VITE_GEMINI_API_KEY || 
+                       process.env.VITE_GOOGLE_GEMINI_API_KEY || '';
 
 function getCleanBase64(base64Str) {
     if (base64Str.startsWith('data:')) {
@@ -13,37 +16,56 @@ function getCleanBase64(base64Str) {
 
 async function extractTextUsingGemini(base64Image, apiKey) {
     const cleanBase64 = getCleanBase64(base64Image);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const candidateModels = [
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+        'gemini-2.5-flash',
+        'gemini-flash-latest'
+    ];
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            contents: [{
-                parts: [
-                    {
-                        text: "You are an expert product label analyzer. Extract all text and declarations visible on this product packaging label accurately without hallucinating or making up missing information. Focus on capturing: Product Name/Title, Brand Name, Net Quantity/Weight, Price/MRP (specifically keeping any Indian Rupee ₹ symbols intact), Dates (MFG Date, Packing Date, EXP Date, Best Before), FSSAI License Number, Barcode digits, Manufacturer Name and Complete Address, Consumer Care contact info, and Country of Origin. Print the text clearly line-by-line as it appears on the label."
-                    },
-                    {
-                        inlineData: {
-                            mimeType: "image/jpeg",
-                            data: cleanBase64
-                        }
-                    }
-                ]
-            }]
-        })
-    });
+    let lastError = null;
 
-    const data = await response.json();
-    if (data.error) {
-        throw new Error(data.error.message || JSON.stringify(data.error));
+    for (const modelName of candidateModels) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            {
+                                text: "You are an expert product label analyzer. Extract all text and declarations visible on this product packaging label accurately without hallucinating or making up missing information. Focus on capturing: Product Name/Title, Brand Name, Net Quantity/Weight, Price/MRP (specifically keeping any Indian Rupee ₹ symbols intact), Dates (MFG Date, Packing Date, EXP Date, Best Before), FSSAI License Number, Barcode digits, Manufacturer Name and Complete Address, Consumer Care contact info, and Country of Origin. Print the text clearly line-by-line as it appears on the label."
+                            },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg",
+                                    data: cleanBase64
+                                }
+                            }
+                        ]
+                    }]
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok && !data.error) {
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (text && text.trim()) {
+                    console.log(`✅ Success with Gemini model [${modelName}]`);
+                    return text;
+                }
+            } else {
+                console.warn(`Model [${modelName}] failed:`, data.error?.message || response.status);
+                lastError = data.error?.message || `HTTP ${response.status}`;
+            }
+        } catch (err) {
+            console.warn(`Model [${modelName}] request exception:`, err.message);
+            lastError = err.message;
+        }
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return text;
+    throw new Error(`All Gemini Vision models failed. Last error: ${lastError}`);
 }
 
 export default async function handler(req, res) {
@@ -75,7 +97,7 @@ export default async function handler(req, res) {
 
         if (!GEMINI_API_KEY) {
             return res.status(400).json({ 
-                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in Vercel environment variables.' 
+                error: 'Google Gemini API key (GEMINI_API_KEY or GOOGLE_GEMINI_API_KEY) is not configured in Vercel environment variables.' 
             });
         }
 
