@@ -12,8 +12,8 @@ function parsePrivateKey(raw) {
 }
 
 const SERVICE_ACCOUNT = {
-    client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL || '',
-    private_key: parsePrivateKey(process.env.GOOGLE_CLOUD_PRIVATE_KEY || ''),
+    client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL || process.env.VITE_GOOGLE_CLOUD_CLIENT_EMAIL || '',
+    private_key: parsePrivateKey(process.env.GOOGLE_CLOUD_PRIVATE_KEY || process.env.VITE_GOOGLE_CLOUD_PRIVATE_KEY || ''),
     token_uri: "https://oauth2.googleapis.com/token"
 };
 

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
 import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ReportDetailProps {
     product: ScannedProduct;
@@ -41,11 +43,8 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         window.print();
     };
 
-    const handleDownloadPDF = async () => {
+    const handleDownloadPDF = () => {
         try {
-            const { jsPDF } = await import('jspdf');
-            const autoTable = (await import('jspdf-autotable')).default;
-
             const doc = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',

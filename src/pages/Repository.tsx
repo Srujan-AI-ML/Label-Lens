@@ -3,6 +3,8 @@ import { useProduct } from '../context/ProductContext';
 import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Package } from 'lucide-react';
 import type { ScannedProduct } from '../types';
 import type { PageType } from '../App';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface RepositoryProps {
     onNavigate: (page: PageType) => void;
@@ -15,11 +17,8 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
-    const handleDownloadSummary = async () => {
+    const handleDownloadSummary = () => {
         try {
-            const { jsPDF } = await import('jspdf');
-            const autoTable = (await import('jspdf-autotable')).default;
-
             const doc = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
