@@ -183,66 +183,37 @@ async function detectBarcodeViaBrowser(base64Image: string): Promise<string | nu
 
 export async function detectBarcode(base64Image: string): Promise<string | null> {
     try {
-        // If Google Cloud Vision is not configured, use the browser BarcodeDetector API
-        if (!hasVisionCredentials()) {
-            console.log('Google Cloud Vision not configured — using browser BarcodeDetector.');
-            return detectBarcodeViaBrowser(base64Image);
+        // Try browser detection first (instant & free)
+        const browserBarcode = await detectBarcodeViaBrowser(base64Image);
+        if (browserBarcode) {
+            return browserBarcode;
         }
 
-        const accessToken = await getAccessToken();
+        // Fallback: call secure backend OCR proxy to extract text and search for barcode patterns
+        const text = await extractTextFromImage(base64Image);
+        if (!text) {
+            return null;
+        }
 
-        const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                requests: [{
-                    image: { content: base64Image },
-                    features: [
-                        { type: 'TEXT_DETECTION' }
-                    ]
-                }]
-            })
-        });
-
-        const data = await response.json();
-        console.log('Barcode Detection Response:', data);
-
-        // Get all text from the image
-        const text = data.responses?.[0]?.fullTextAnnotation?.text ||
-            data.responses?.[0]?.textAnnotations?.[0]?.description || '';
-
-        console.log('Extracted text from barcode image:', text);
-
-        // Remove all whitespace and newlines, then look for barcode patterns
         const cleanText = text.replace(/\s+/g, '');
-        console.log('Cleaned text:', cleanText);
+        console.log('Cleaned text for barcode search:', cleanText);
 
-        // Look for barcode patterns (8-14 digit numbers)
-        // EAN-13: 13 digits, EAN-8: 8 digits, UPC-A: 12 digits
         const barcodePattern = /(\d{8,14})/g;
         const matches = cleanText.match(barcodePattern);
 
-        console.log('Barcode pattern matches:', matches);
-
         if (matches && matches.length > 0) {
-            // Filter to valid barcode lengths (8, 12, 13, 14)
             const validBarcodes = matches.filter((m: string) =>
                 m.length === 8 || m.length === 12 || m.length === 13 || m.length === 14
             );
 
             if (validBarcodes.length > 0) {
-                // Return the longest valid barcode
                 const barcode = validBarcodes.sort((a: string, b: string) => b.length - a.length)[0];
-                console.log('Detected barcode:', barcode);
+                console.log('Detected barcode from server OCR text:', barcode);
                 return barcode;
             }
 
-            // If no valid length, return the longest match anyway
             const barcode = matches.sort((a: string, b: string) => b.length - a.length)[0];
-            console.log('Using longest match as barcode:', barcode);
+            console.log('Using longest digit match as barcode:', barcode);
             return barcode;
         }
 
