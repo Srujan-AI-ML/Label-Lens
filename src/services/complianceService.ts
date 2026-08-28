@@ -30,39 +30,116 @@ function firstMatch(text: string, patterns: RegExp[]): string | null {
   return null;
 }
 
+export function normalizeOCRText(rawText: string): string {
+  if (!rawText) return '';
+  let text = rawText;
+
+  // Rupee symbol normalization: Fix OCR interpreting ₹ as '3' in MRP / Price contexts
+  text = text.replace(/(m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|price)\s*[:\-\(]?\s*(?:rs\.?|inr)?\s*3\s+([\d,]+(?:\.\d{1,2})?)/gi, '$1: ₹ $2');
+  text = text.replace(/(m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|price)\s*[:\-\(]?\s*(?:rs\.?|inr)?\s*3([\d,]{2,}(?:\.\d{1,2})?)/gi, (match, prefix, numStr) => {
+    if (numStr.length >= 4 && numStr.startsWith('3')) {
+      const trimmed = numStr.substring(1);
+      return `${prefix}: ₹ ${trimmed}`;
+    }
+    return `${prefix}: ₹ ${numStr}`;
+  });
+
+  text = text.replace(/(unit\s*(?:sale\s*)?price|usp)\s*[:\-]?\s*(?:rs\.?|inr)?\s*3\s*0\.(\d+)/gi, '$1: ₹0.$2');
+  text = text.replace(/(unit\s*(?:sale\s*)?price|usp)\s*[:\-]?\s*(?:rs\.?|inr)?\s*3(\d+\.\d+)/gi, '$1: ₹$2');
+  text = text.replace(/\(3(\d+\.\d+\s*\/\s*100\s*g)\)/gi, '(₹$1)');
+  text = text.replace(/\b(?:in\s*r|rs\.?)\b/gi, '₹');
+
+  return text;
+}
+
 // ---- Declaration Extractors ---------------------------------
 
+function cleanProductNameString(raw: string): string {
+  return raw
+    .replace(/^(?:a\s+be\b|he\s*-\s*nn\b|[\W_]+)/gi, '')
+    .replace(/\b(?:1\s*kg\s*pack|net\s*wt:?\s*\d+\s*\w+|barcode|gtin)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function extractGenericName(text: string): ComplianceDeclaration {
-  // 1. Check for explicit product/item label
+  // 1. Explicit tag check (Product Name:, Commodity:, Item Name:)
   const explicitPattern = /(?:product(?:\s*name)?|commodity|item(?:\s*name)?|product\s*identity|common\s*name)\s*[:\-]\s*([^\n\r]{3,60})/i;
   const expMatch = text.match(explicitPattern);
   if (expMatch && expMatch[1]) {
-    const clean = expMatch[1].trim();
+    const clean = cleanProductNameString(expMatch[1]);
     if (clean.length > 2) return makeDeclaration(true, clean, 'high');
   }
 
-  // 2. Filter lines to find clean product title candidates
-  const ignoredPatterns = [
-    /^(?:manufactured|mfd|packed|marketed|imported|distributed|mfr|pvt|ltd|limited|inc|llc|corp)\b/i,
-    /^(?:nutrition|ingredients|mrp|rs\.|₹|net\s*wt|net\s*qty|net\s*quantity|batch|lot|fssai|lic|licence|license)\b/i,
-    /^(?:consumer|care|helpline|customer|feedback|complaint|email|phone|tel|call)\b/i,
-    /^(?:best\s*before|use\s*by|mfg|pkd|packed|expiry|exp|date)\b/i,
-    /^(?:country\s*of\s*origin|made\s*in|product\s*of|origin)\b/i,
-    /^(?:store\s*in|keep\s*in|storage|directions|instructions|warning|allergen|contains|table|per\s*100|serving)\b/i,
-    /^(?:veg|non-veg|green\s*dot|100%|rules|2011)\b/i,
+  // 2. Candidate Scoring engine across all lines
+  const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length >= 3);
+  let bestCandidate: string | null = null;
+  let highestScore = -999;
+
+  const knownBrands = [
+    'ORGANIC INDIA', 'BRITANNIA', 'PARLE', 'MAGGI', 'AMUL', 'NESTLE',
+    'DABUR', 'HALDIRAM', 'LAYS', 'CADBURY', 'PATANJALI', 'TATA', 'FORTUNE',
+    'HALDIRAMS', 'MOTHER DAIRY', 'EPIGAMIA', 'RAW', 'PAPER BOAT', 'MUNCH',
+    'GOOD DAY', 'PARLE-G', 'SUNFEAST', 'MARICO', 'SAFFOLA', 'SLURRP FARM'
+  ];
+
+  const productKeywords = [
+    'BASMATI RICE', 'ORGANIC BASMATI RICE', 'RICE', 'COOKIES', 'BISCUITS',
+    'NOODLES', 'BUTTER', 'MILK', 'ATTA', 'FLOUR', 'OIL', 'GHEE', 'SPICES',
+    'TEA', 'COFFEE', 'JUICE', 'SNACKS', 'SALT', 'SUGAR', 'PULSES', 'DAL',
+    'HONEY', 'OATS', 'CHIPS', 'CHOCOLATE', 'PASTA', 'VERMICELLI', 'RAVA'
+  ];
+
+  const excludePatterns = [
+    /\b(?:manufactured|mfd|packed|marketed|imported|distributed|mfr|pvt|ltd|limited|inc|llc|corp)\b/i,
+    /\b(?:nutrition|ingredients|mrp|rs\.|₹|net\s*wt|net\s*qty|net\s*quantity|batch|lot|fssai|lic|licence|license)\b/i,
+    /\b(?:consumer|care|helpline|customer|feedback|complaint|email|phone|tel|call)\b/i,
+    /\b(?:best\s*before|use\s*by|mfg|pkd|packed|expiry|exp|date|shelf\s*life)\b/i,
+    /\b(?:country\s*of\s*origin|made\s*in|product\s*of|origin)\b/i,
+    /\b(?:store\s*in|keep\s*in|storage|directions|instructions|warning|allergen|contains|table|per\s*100|serving|energy|protein|fat|carbohydrate|kcal)\b/i,
+    /\b(?:veg|non-veg|green\s*dot|100%|rules|2011|pack|barcode|gtin|unit\s*sale)\b/i,
+    /^[A-Za-z]\s+be\b/i,
     /^[\d\W_]+$/
   ];
 
-  const lines = text.split(/[\r\n]+/)
-    .map(l => l.trim())
-    .filter(l => l.length >= 3 && l.length <= 60 && !ignoredPatterns.some(p => p.test(l)));
+  lines.forEach((line, index) => {
+    if (excludePatterns.some(p => p.test(line))) return;
 
-  if (lines.length > 0) {
-    if (lines.length >= 2 && lines[0].length < 25 && lines[1].length < 35 && !lines[0].includes(':') && !lines[1].includes(':')) {
-      const combined = `${lines[0]} ${lines[1]}`.trim();
-      return makeDeclaration(true, combined, 'medium');
+    let score = 0;
+    const upperLine = line.toUpperCase();
+
+    if (index < 5) score += (5 - index) * 5;
+    if (knownBrands.some(b => upperLine.includes(b))) score += 50;
+    if (productKeywords.some(p => upperLine.includes(p))) score += 40;
+    if (line.length >= 8 && line.length <= 50) score += 20;
+
+    const alphaCount = (line.match(/[a-zA-Z]/g) || []).length;
+    if (alphaCount / line.length < 0.6) score -= 40;
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestCandidate = line;
     }
-    return makeDeclaration(true, lines[0], 'medium');
+  });
+
+  if (lines.length >= 2) {
+    const combinedCandidate = `${lines[0]} ${lines[1]}`.trim();
+    if (!excludePatterns.some(p => p.test(combinedCandidate))) {
+      const upperCombined = combinedCandidate.toUpperCase();
+      let combinedScore = 30;
+      if (knownBrands.some(b => upperCombined.includes(b))) combinedScore += 50;
+      if (productKeywords.some(p => upperCombined.includes(p))) combinedScore += 40;
+
+      if (combinedScore > highestScore) {
+        highestScore = combinedScore;
+        bestCandidate = combinedCandidate;
+      }
+    }
+  }
+
+  if (bestCandidate && highestScore > 10) {
+    const cleaned = cleanProductNameString(bestCandidate);
+    return makeDeclaration(true, cleaned, highestScore > 50 ? 'high' : 'medium');
   }
 
   return makeDeclaration(false, null, 'low');
@@ -83,7 +160,11 @@ function extractManufacturer(text: string): ComplianceDeclaration {
       }
     }
     const cleaned = block.replace(/[\r\n]+/g, ', ').replace(/\s*,\s*/g, ', ').replace(/,+$/, '').trim();
-    if (cleaned.length >= 5) {
+
+    const validAddressIndicators = /\b(?:pvt|ltd|limited|inc|corp|llc|industries|products|foods|enterprises|plot|street|road|industrial|area|phase|village|city|state|pin|india|dist|sector|building|floor|crossing|mumbai|delhi|bangalore|hyderabad|chennai|kolkata|pune|ahmedabad|goa|karnataka|maharashtra|tamil|uttar|haryana|gujarat)\b/i;
+    const invalidIndicators = /\b(?:protein|fat|carbohydrate|sugar|kcal|barcode|gtin|mrp|exp|mfg)\b/i;
+
+    if (cleaned.length >= 5 && validAddressIndicators.test(cleaned) && !invalidIndicators.test(cleaned)) {
       return makeDeclaration(true, cleaned, 'high');
     }
   }
@@ -129,7 +210,7 @@ function extractManufactureDate(text: string): ComplianceDeclaration {
 function extractBestBefore(text: string): ComplianceDeclaration {
   const patterns = [
     /(?:best\s*b[e|o]?fore?|use\s*by|expiry\s*date|exp\.?\s*date|expiry|bbe|best\s*by|use\s*before|valid\s*up\s*to)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
-    /\b(?:exp|expiry)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /\b(?:exp|expiry)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
     /(?:best\s*before\s*([0-9]+\s*(?:months?|days?|years?|weeks?)(?:\s*from\s*(?:mfg|mfd|pkd|packing|manufacture|date))?))/i
   ];
   const value = firstMatch(text, patterns);
@@ -149,10 +230,18 @@ function extractMRP(text: string): ComplianceDeclaration {
     /(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|inclusive|incl)/i,
     /mrp\s*[:\-\s]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i
   ];
-  const value = firstMatch(text, patterns);
+  let value = firstMatch(text, patterns);
   if (value) {
-    const num = value.replace(/[^\d.,]/g, '');
-    return makeDeclaration(true, `₹${num}`, 'high');
+    let num = value.replace(/[^\d.,]/g, '');
+    if (num.length >= 5 && num.startsWith('3') && num.includes('.')) {
+      const rest = num.substring(1);
+      if (parseFloat(rest) > 0 && parseFloat(rest) < 50000) {
+        num = rest;
+      }
+    }
+    if (num && !isNaN(parseFloat(num)) && parseFloat(num) > 0) {
+      return makeDeclaration(true, `₹${num}`, 'high');
+    }
   }
   return makeDeclaration(false, null, 'low');
 }
@@ -221,13 +310,21 @@ function extractCountryOfOrigin(text: string): ComplianceDeclaration {
 
 function extractRetailSalePrice(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:unit\s*(?:sale\s*)?price|usp|unit\s*price)\s*[:\-]?\s*([^\n\r]{3,30})/i,
-    /((?:rs\.?|₹)\s*[\d,]+(?:\.\d{1,2})?\s*\/\s*(?:g|gm|kg|ml|l|unit|piece|pc|no))/i,
-    /(?:inclusive|incl\.?)\s*of\s*(?:all\s*)?tax/i
+    /(?:unit\s*(?:sale\s*)?price|usp|unit\s*price)\s*[:\-]?\s*([^\n\r]{3,40})/i,
+    /((?:rs\.?|₹)\s*[\d,]+(?:\.\d{1,3})?\s*(?:per|\/)\s*(?:g|gm|gram|kg|ml|l|unit|piece|pc|no)[^\n\r]*)/i
   ];
+  const match = text.match(/(?:unit\s*(?:sale\s*)?price|usp|unit\s*price)\s*[:\-]?\s*([^\n\r]{3,40})/i);
+  if (match && match[1]) {
+    let clean = match[1].trim();
+    if (/^3\s*0\./.test(clean)) clean = clean.replace(/^3\s*0\./, '₹0.');
+    return makeDeclaration(true, clean, 'high');
+  }
+
   const value = firstMatch(text, patterns);
   if (value) {
-    return makeDeclaration(true, value.trim(), 'high');
+    let clean = value.trim();
+    if (/^3\s*0\./.test(clean)) clean = clean.replace(/^3\s*0\./, '₹0.');
+    return makeDeclaration(true, clean, 'high');
   }
   return makeDeclaration(false, null, 'low');
 }
@@ -243,7 +340,7 @@ export function analyseCompliance(
   complianceScore: number;
   complianceStatus: ComplianceStatus;
 } {
-  const text = rawText;
+  const text = normalizeOCRText(rawText);
 
   const declarations: ComplianceDeclarations = {
     genericName: extractGenericName(text),
