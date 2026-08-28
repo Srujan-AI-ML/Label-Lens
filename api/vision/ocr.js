@@ -7,6 +7,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY ||
                        process.env.VITE_GOOGLE_GEMINI_API_KEY || '';
 
 function getCleanBase64(base64Str) {
+    if (!base64Str) return '';
     if (base64Str.startsWith('data:')) {
         const parts = base64Str.split(';base64,');
         return parts[1] || base64Str;
@@ -84,10 +85,15 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Authenticate requests
-        const decoded = await authenticateRequest(req);
-        if (!decoded || !decoded.userId) {
-            return res.status(401).json({ error: 'Unauthorized. Must be signed in to perform scans.' });
+        // Optional user authentication check (allow guest scans)
+        let userId = null;
+        try {
+            const decoded = await authenticateRequest(req);
+            if (decoded && decoded.userId) {
+                userId = decoded.userId;
+            }
+        } catch (e) {
+            // Unauthenticated/guest session - allow scanning to proceed
         }
 
         const { image } = req.body || {};
@@ -97,11 +103,11 @@ export default async function handler(req, res) {
 
         if (!GEMINI_API_KEY) {
             return res.status(400).json({ 
-                error: 'Google Gemini API key (GEMINI_API_KEY or GOOGLE_GEMINI_API_KEY) is not configured in Vercel environment variables.' 
+                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in Vercel environment variables.' 
             });
         }
 
-        console.log('Running Google Gemini API Multimodal Vision Scanner...');
+        console.log(`Running Google Gemini API Vision Scanner (User: ${userId || 'Guest'})...`);
         const extractedText = await extractTextUsingGemini(image, GEMINI_API_KEY);
         console.log('✅ Google Gemini API scan successful');
 
