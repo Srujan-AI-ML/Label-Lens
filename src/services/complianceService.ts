@@ -230,7 +230,7 @@ function extractMRP(text: string): ComplianceDeclaration {
     /(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|inclusive|incl)/i,
     /mrp\s*[:\-\s]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i
   ];
-  let value = firstMatch(text, patterns);
+  const value = firstMatch(text, patterns);
   if (value) {
     let num = value.replace(/[^\d.,]/g, '');
     if (num.length >= 5 && num.startsWith('3') && num.includes('.')) {
@@ -356,8 +356,8 @@ export function analyseCompliance(
 } {
   const text = normalizeOCRText(rawText);
 
-  let productName = typeof productNameOrOverrides === 'string' ? productNameOrOverrides : productNameOrOverrides?.productName;
-  let formValues: FormSpecificsOverride | undefined = typeof productNameOrOverrides === 'object' ? productNameOrOverrides : undefined;
+  const productName = typeof productNameOrOverrides === 'string' ? productNameOrOverrides : productNameOrOverrides?.productName;
+  const formValues: FormSpecificsOverride | undefined = typeof productNameOrOverrides === 'object' ? productNameOrOverrides : undefined;
 
   const declarations: ComplianceDeclarations = {
     genericName: extractGenericName(text),

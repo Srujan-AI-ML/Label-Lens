@@ -1,5 +1,4 @@
 import * as jose from 'jose';
-import Tesseract from 'tesseract.js';
 
 const CLIENT_SERVICE_ACCOUNT = {
     client_email: import.meta.env.VITE_GOOGLE_CLOUD_CLIENT_EMAIL || '',
@@ -150,15 +149,7 @@ async function preprocessImageForOCR(base64Image: string): Promise<string> {
     });
 }
 
-export async function extractTextUsingTesseract(base64Image: string): Promise<string> {
-    console.log('Running image preprocessing for OCR...');
-    const preprocessedSrc = await preprocessImageForOCR(base64Image);
-    console.log('Running client-side Tesseract.js OCR engine...');
-    const result = await Tesseract.recognize(preprocessedSrc, 'eng');
-    const text = result.data.text || '';
-    console.log('Raw Tesseract OCR output:\n', text);
-    return text;
-}
+
 
 // Call Server-Side Google Cloud Vision API Proxy or Direct Client Vision Fallback
 export async function extractTextFromImage(base64Image: string): Promise<string> {
@@ -273,8 +264,8 @@ function parseDate(dateStr: string): string | null {
     const match = dateStr.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
     if (!match) return null;
 
-    let day = parseInt(match[1]);
-    let month = parseInt(match[2]);
+    const day = parseInt(match[1]);
+    const month = parseInt(match[2]);
     let year = parseInt(match[3]);
 
     if (year < 100) {
