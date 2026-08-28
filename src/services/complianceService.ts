@@ -259,7 +259,41 @@ function extractBestBefore(text: string): ComplianceDeclaration {
 }
 
 function extractMRP(text: string): ComplianceDeclaration {
-  const mrpPrefixPattern = /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*(?:selling\s*)?price|max\s*retail\s*price|retail\s*price|maximum\s*sale\s*price|selling\s*price|recommended\s*retail\s*price)(?:\s*\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:rs\.?|₹\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+  const mrpKeywords = /(?:m\.?\s*r\.?\s*p\.?|max(?:imum)?\s*retail\s*(?:selling\s*)?price|max\s*retail\s*price|retail\s*(?:selling\s*)?price|maximum\s*sale\s*price|maximum\s*retail\s*value|mrp\s*value|mrp\s*amount)/i;
+
+  const lines = text.split(/[\r\n]+/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (mrpKeywords.test(line) && !/\b(?:unit\s*(?:sale\s*)?price|usp|per\s*g|per\s*gram|per\s*100g)\b/i.test(line)) {
+      const priceMatch = line.match(/(?:rs\.?|₹\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+      if (priceMatch && priceMatch[1]) {
+        let num = priceMatch[1].replace(/[^\d.,]/g, '');
+        if (num.length >= 5 && num.startsWith('3') && num.includes('.')) {
+          const rest = num.substring(1);
+          if (parseFloat(rest) > 0 && parseFloat(rest) < 50000) {
+            num = rest;
+          }
+        }
+        if (num && !isNaN(parseFloat(num)) && parseFloat(num) > 0) {
+          return makeDeclaration(true, `₹${num}`, 'high');
+        }
+      }
+
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim();
+        const nextPriceMatch = nextLine.match(/(?:rs\.?|₹\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+        if (nextPriceMatch && nextPriceMatch[1]) {
+          let num = nextPriceMatch[1].replace(/[^\d.,]/g, '');
+          if (num && !isNaN(parseFloat(num)) && parseFloat(num) > 0) {
+            return makeDeclaration(true, `₹${num}`, 'high');
+          }
+        }
+      }
+    }
+  }
+
+  const mrpPrefixPattern = /(?:m\.?\s*r\.?\s*p\.?|max(?:imum)?\s*retail\s*(?:selling\s*)?price|max\s*retail\s*price|retail\s*(?:selling\s*)?price|maximum\s*sale\s*price|selling\s*price|recommended\s*retail\s*price|mrp\s*value|mrp\s*amount)(?:\s*\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:\(?incl\.?(?:usive)?\s*(?:of)?\s*all\s*taxes\)?)*\s*[:\-\(\s]*\s*(?:rs\.?|₹\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
 
   const match = text.match(mrpPrefixPattern);
   if (match && match[1]) {
