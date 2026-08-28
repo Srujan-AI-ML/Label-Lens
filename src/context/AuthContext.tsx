@@ -14,8 +14,10 @@ interface AuthContextType {
     isAuthenticated: boolean;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string) => Promise<void>;
-    loginWithGoogle: (credential: string) => Promise<void>;
+    loginWithGoogle: (credential: string, setSessionImmediately?: boolean) => Promise<any>;
+    completeGoogleLogin: (token: string, user: User) => void;
     logout: () => void;
+    updatePassword: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,11 +57,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('labellens-user', JSON.stringify(response.user));
     };
 
-    const loginWithGoogle = async (credential: string) => {
+    const loginWithGoogle = async (credential: string, setSessionImmediately = true) => {
         const response = await authAPI.googleLogin(credential);
-        setToken(response.token);
-        setUser(response.user);
-        localStorage.setItem('labellens-user', JSON.stringify(response.user));
+        if (setSessionImmediately) {
+            setToken(response.token);
+            setUser(response.user);
+            localStorage.setItem('labellens-user', JSON.stringify(response.user));
+        }
+        return response;
+    };
+
+    const completeGoogleLogin = (token: string, userVal: User) => {
+        setToken(token);
+        setUser(userVal);
+        localStorage.setItem('labellens-user', JSON.stringify(userVal));
+    };
+
+    const updatePassword = async (password: string) => {
+        await authAPI.updatePassword(password);
     };
 
     const logout = () => {
@@ -78,7 +93,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 login,
                 register,
                 loginWithGoogle,
-                logout
+                completeGoogleLogin,
+                logout,
+                updatePassword
             }}
         >
             {children}

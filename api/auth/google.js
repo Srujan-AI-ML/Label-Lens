@@ -73,6 +73,8 @@ export default async function handler(req, res) {
             ]
         });
 
+        const isNewUser = !user;
+
         if (user) {
             // Update existing user with Google info if not already set
             if (!user.googleId) {
@@ -132,6 +134,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
             success: true,
             token,
+            isNew: isNewUser,
             user: {
                 id: user._id.toString(),
                 username: user.username || name,

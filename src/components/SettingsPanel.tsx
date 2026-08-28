@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, Scale, Moon, Sun, Shield, Heart } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Scale, Moon, Sun, Shield, Heart, Lock, KeyRound } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -9,6 +10,54 @@ interface SettingsPanelProps {
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose }) => {
     const { isDarkMode, toggleDarkMode } = useTheme();
+    const { updatePassword } = useAuth();
+
+    // Password Update States
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passError, setPassError] = useState('');
+    const [passSuccess, setPassSuccess] = useState('');
+    const [passLoading, setPassLoading] = useState(false);
+
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPassError('');
+        setPassSuccess('');
+
+        if (newPassword.length < 8) {
+            setPassError('Password must be at least 8 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPassError('Passwords do not match.');
+            return;
+        }
+        if (!/[A-Z]/.test(newPassword)) {
+            setPassError('Must contain at least one uppercase letter (A–Z).');
+            return;
+        }
+        if (!/[0-9]/.test(newPassword)) {
+            setPassError('Must contain at least one digit (0–9).');
+            return;
+        }
+
+        setPassLoading(true);
+        try {
+            await updatePassword(newPassword);
+            setPassSuccess('Password updated successfully!');
+            setNewPassword('');
+            setConfirmPassword('');
+            setTimeout(() => {
+                setShowPasswordForm(false);
+                setPassSuccess('');
+            }, 2000);
+        } catch (err) {
+            setPassError(err instanceof Error ? err.message : 'Failed to update password');
+        } finally {
+            setPassLoading(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -65,6 +114,76 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                             >
                                 <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${isDarkMode ? 'left-6' : 'left-1'}`} />
                             </button>
+                        </div>
+                    </section>
+
+                    {/* Security Section */}
+                    <section className="space-y-3">
+                        <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Account Security</h3>
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl space-y-3">
+                            {!showPasswordForm ? (
+                                <button
+                                    onClick={() => setShowPasswordForm(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-xs cursor-pointer shadow shadow-blue-500/10"
+                                >
+                                    <KeyRound size={14} />
+                                    Set / Change Password
+                                </button>
+                            ) : (
+                                <form onSubmit={handlePasswordChange} className="space-y-3">
+                                    {passError && <p className="text-xs text-rose-500 font-semibold">{passError}</p>}
+                                    {passSuccess && <p className="text-xs text-blue-500 font-semibold">{passSuccess}</p>}
+                                    
+                                    <div className="relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                            <Lock size={14} />
+                                        </div>
+                                        <input
+                                            type="password"
+                                            placeholder="New Password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            className="w-full pl-9 pr-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                            <Lock size={14} />
+                                        </div>
+                                        <input
+                                            type="password"
+                                            placeholder="Confirm Password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            className="w-full pl-9 pr-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="submit"
+                                            disabled={passLoading}
+                                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs disabled:opacity-50 cursor-pointer"
+                                        >
+                                            {passLoading ? 'Saving...' : 'Save'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowPasswordForm(false);
+                                                setNewPassword('');
+                                                setConfirmPassword('');
+                                                setPassError('');
+                                                setPassSuccess('');
+                                            }}
+                                            className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold rounded-xl text-xs cursor-pointer"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
                         </div>
                     </section>
 

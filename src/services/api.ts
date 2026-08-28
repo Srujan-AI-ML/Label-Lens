@@ -63,6 +63,13 @@ export const authAPI = {
             method: 'POST',
             body: JSON.stringify({ credential })
         });
+    },
+
+    updatePassword: async (password: string) => {
+        return fetchWithAuth('/auth/update-password', {
+            method: 'POST',
+            body: JSON.stringify({ password })
+        });
     }
 };
 
