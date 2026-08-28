@@ -166,15 +166,15 @@ export default async function handler(req, res) {
             // Guest session
         }
 
-        const { image } = req.body || {};
+        const { image, apiKey: clientApiKey } = req.body || {};
         if (!image) {
             return res.status(400).json({ error: 'Image content is required.' });
         }
 
-        const apiKey = getGeminiApiKey();
+        const apiKey = clientApiKey || req.headers['x-gemini-api-key'] || getGeminiApiKey();
         if (!apiKey) {
             return res.status(400).json({ 
-                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in environment variables.' 
+                error: 'Google Gemini API key (GEMINI_API_KEY) is not configured in environment variables or request.' 
             });
         }
 

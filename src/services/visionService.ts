@@ -22,6 +22,123 @@ export interface GeminiScanResult {
     product: StructuredProduct;
 }
 
+const getClientEnvKey = (): string => {
+    try {
+        return (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+               (import.meta.env.GEMINI_API_KEY as string) || '';
+    } catch {
+        return '';
+    }
+};
+
+async function callGeminiDirectlyFromClient(imagePayload: string, apiKey: string): Promise<GeminiScanResult> {
+    console.log('--- [PIPELINE] DIRECT CLIENT GEMINI API FALLBACK START ---');
+    
+    let mimeType = 'image/jpeg';
+    let cleanBase64 = imagePayload;
+
+    if (imagePayload.startsWith('data:')) {
+        const matches = imagePayload.match(/^data:([^;]+);base64,(.*)$/s);
+        if (matches) {
+            mimeType = matches[1] || 'image/jpeg';
+            cleanBase64 = matches[2] || '';
+        } else {
+            const parts = imagePayload.split(';base64,');
+            cleanBase64 = parts[1] || imagePayload;
+        }
+    }
+
+    cleanBase64 = cleanBase64.replace(/\s/g, '');
+
+    const candidateModels = [
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-flash-latest'
+    ];
+
+    const promptText = `You are an expert Legal Metrology and packaged commodity inspector.
+Carefully examine the provided packaging/product label image. Extract all declarations accurately without inventing, guessing, or hallucinating information.
+
+Return a strictly valid JSON object with the following structure:
+{
+  "rawText": "Complete transcript of all visible text and declarations on the label, line by line.",
+  "product": {
+    "productName": "Exact main product title or common identity (e.g. Parle-G Biscuits, Aloo Bhujia, Coca-Cola). Null if not visible.",
+    "brand": "Brand or trademark name (e.g. Haldiram's, Britannia, Nestle). Null if not visible.",
+    "netQuantity": "Numeric quantity value only (e.g. 200, 500, 1). Null if not visible.",
+    "quantityUnit": "Unit of measurement: g, kg, ml, L, pcs, or units. Null if not visible.",
+    "mrp": "Maximum Retail Price number only without currency symbols (e.g. 249.00, 45, 10.00). Do not confuse rupee symbol ₹ with digit 3. Null if not visible.",
+    "manufacturingDate": "Manufacturing / Packing date exactly as printed or in standard format (e.g. 2026-08-15, 15/08/2026, AUG 2026). Null if not visible.",
+    "expiryDate": "Best before / Expiry date or duration (e.g. 2026-12-31, 12 Months from PKD). Null if not visible.",
+    "manufacturerName": "Name of manufacturer, packer, or marketer. Null if not visible.",
+    "manufacturerAddress": "Complete physical address of the manufacturer/packer if visible. Null if not visible.",
+    "consumerCare": "Customer care phone number, helpline, email address, or contact info. Null if not visible.",
+    "fssaiLicense": "14-digit FSSAI License Number if present. Null if not visible.",
+    "countryOfOrigin": "Country of origin / manufacturing (e.g. India). Null if not visible.",
+    "unitSalePrice": "Unit sale price (USP per g/ml) if indicated. Null if not visible.",
+    "barcode": "Numeric barcode / EAN / UPC digits if visible on the label. Null if not visible."
+  }
+}
+
+Respond ONLY with the JSON object. Do not include markdown code block syntax or additional explanatory text.`;
+
+    let lastError = null;
+
+    for (const modelName of candidateModels) {
+        try {
+            console.log(`[Client Gemini] Requesting model: ${modelName}`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: promptText },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType || 'image/jpeg',
+                                    data: cleanBase64
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok && !data.error) {
+                const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (responseText && responseText.trim()) {
+                    const cleanJsonStr = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+                    const parsed = JSON.parse(cleanJsonStr);
+                    console.log(`[Client Gemini] ✅ Success with model [${modelName}]`);
+                    return {
+                        text: parsed.rawText || '',
+                        product: parsed.product || {}
+                    };
+                }
+            } else {
+                lastError = data.error?.message || `HTTP ${response.status}`;
+            }
+        } catch (err: any) {
+            lastError = err.message;
+        }
+    }
+
+    throw new Error(`Direct Gemini API failed. ${lastError}`);
+}
+
 // Call Serverless Endpoint for Google Gemini API Vision Scanning with structured extraction and tracing
 export async function scanProductImageWithGemini(imagePayload: string): Promise<GeminiScanResult> {
     console.log('--- [PIPELINE] SCAN START ---');
@@ -49,17 +166,20 @@ export async function scanProductImageWithGemini(imagePayload: string): Promise<
     console.log(`--- [PIPELINE] IMAGE MIME TYPE: ${mimeType} ---`);
 
     console.log('--- [PIPELINE] IMAGE CONVERSION START ---');
-    // Ensure clean base64 payload
     const formattedPayload = imagePayload.startsWith('data:') 
         ? imagePayload 
         : `data:${mimeType};base64,${cleanBase64.replace(/\s/g, '')}`;
     console.log('--- [PIPELINE] IMAGE CONVERSION COMPLETE ---');
 
+    const clientApiKey = getClientEnvKey();
+
     console.log('--- [PIPELINE] API REQUEST START ---');
     const token = localStorage.getItem('labellens-token');
     
     const startTime = Date.now();
-    let response: Response;
+    let response: Response | null = null;
+    let serverErrorMsg: string | null = null;
+
     try {
         console.log('--- [PIPELINE] API REQUEST SENT to /api/vision/ocr ---');
         response = await fetch('/api/vision/ocr', {
@@ -68,42 +188,53 @@ export async function scanProductImageWithGemini(imagePayload: string): Promise<
                 'Content-Type': 'application/json',
                 ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: JSON.stringify({ image: formattedPayload })
+            body: JSON.stringify({ 
+                image: formattedPayload,
+                ...(clientApiKey ? { apiKey: clientApiKey } : {})
+            })
         });
+
+        const duration = Date.now() - startTime;
+        console.log(`--- [PIPELINE] AI/OCR RESPONSE RECEIVED (Status: ${response.status} in ${duration}ms) ---`);
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && !data.error) {
+                console.log('--- [PIPELINE] RESPONSE PARSED ---', data);
+                console.log('--- [PIPELINE] PRODUCT OBJECT CREATED ---', data.product);
+                console.log('--- [PIPELINE] RAW TEXT EXTRACTED LENGTH ---', (data.text || '').length);
+                return {
+                    text: data.text || '',
+                    product: data.product || {}
+                };
+            } else {
+                serverErrorMsg = data.error || data.details || `HTTP ${response.status}`;
+            }
+        } else {
+            try {
+                const errData = await response.json();
+                serverErrorMsg = errData.error || errData.details || `HTTP ${response.status}`;
+            } catch {
+                serverErrorMsg = `HTTP ${response.status}`;
+            }
+        }
     } catch (networkErr: any) {
-        console.error('--- [PIPELINE] API NETWORK REQUEST FAILED ---', networkErr);
-        throw new Error(`API connection failed: ${networkErr.message}`);
+        console.warn('--- [PIPELINE] API SERVERLESS ROUTE NETWORK FAILURE ---', networkErr.message);
+        serverErrorMsg = networkErr.message;
     }
 
-    const duration = Date.now() - startTime;
-    console.log(`--- [PIPELINE] AI/OCR RESPONSE RECEIVED (Status: ${response.status} in ${duration}ms) ---`);
-
-    let data: any;
-    try {
-        data = await response.json();
-    } catch (parseErr: any) {
-        console.error('--- [PIPELINE] ERROR PARSING JSON RESPONSE ---', parseErr);
-        throw new Error(`Server returned invalid JSON response (${response.status})`);
+    // If serverless route fails but client API key exists, fallback to direct client Gemini call
+    if (clientApiKey) {
+        console.warn('--- [PIPELINE] SERVERLESS OCR FAILED/UNCONFIGURED, ATTEMPTING DIRECT CLIENT GEMINI API FALLBACK ---', serverErrorMsg);
+        try {
+            return await callGeminiDirectlyFromClient(formattedPayload, clientApiKey);
+        } catch (clientErr: any) {
+            console.error('--- [PIPELINE] DIRECT CLIENT GEMINI FALLBACK FAILED ---', clientErr.message);
+            throw new Error(`Gemini Vision scan failed: ${clientErr.message}`);
+        }
     }
 
-    console.log('--- [PIPELINE] RESPONSE PARSED ---', data);
-
-    if (!response.ok || data.error) {
-        const errMsg = data.error || data.details || `Gemini Vision processing failed (${response.status})`;
-        console.error('--- [PIPELINE] GEMINI API ERROR ---', errMsg);
-        throw new Error(errMsg);
-    }
-
-    const rawText: string = data.text || '';
-    const product: StructuredProduct = data.product || {};
-
-    console.log('--- [PIPELINE] PRODUCT OBJECT CREATED ---', product);
-    console.log('--- [PIPELINE] RAW TEXT EXTRACTED LENGTH ---', rawText.length);
-
-    return {
-        text: rawText,
-        product: product
-    };
+    throw new Error(serverErrorMsg || 'Gemini Vision processing failed. Please ensure GEMINI_API_KEY is configured.');
 }
 
 // Backward-compatible text-only wrapper
@@ -117,7 +248,6 @@ export function extractExpiryDate(ocrText: string): string | null {
     if (!ocrText) return null;
     const lines = ocrText.split('\n');
 
-    // Look for lines containing expiry keywords
     const expiryKeywords = ['use by', 'best before', 'expiry', 'exp', 'bb', 'best by', 'exp date'];
     const ignoreKeywords = ['pkd', 'mfg', 'mfd', 'packed', 'manufacturing', 'mrp'];
 
@@ -236,7 +366,6 @@ export async function detectBarcode(base64Image: string, preExtractedText?: stri
             return null;
         }
 
-        // Check for explicitly labeled barcode
         const explicitPattern = /(?:barcode|ean(?:-?13|-?8)?|upc(?:-?a)?|gtin(?:-?14|-?12|-?13|-?8)?)\s*[:\-]?\s*(\d{8,14})\b/i;
         const expMatch = text.match(explicitPattern);
         if (expMatch && expMatch[1]) {
@@ -244,7 +373,6 @@ export async function detectBarcode(base64Image: string, preExtractedText?: stri
             return expMatch[1].trim();
         }
 
-        // Check standalone lines with only 8, 12, 13, or 14 digits
         const lines = text.split(/[\r\n]+/).map(l => l.trim());
         for (const line of lines) {
             const cleanDigits = line.replace(/\s+/g, '');
