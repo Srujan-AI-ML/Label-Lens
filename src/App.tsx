@@ -91,7 +91,7 @@ function AppContent() {
         onNavigate={navigateToPage}
         onOpenAddModal={() => setIsAddModalOpen(true)}
       >
-        <div key={selectedProduct ? selectedProduct._id || selectedProduct.id : currentPage} className="page-transition">
+        <div key={selectedProduct ? selectedProduct.id : currentPage} className="page-transition">
           {renderPage()}
         </div>
       </Layout>
