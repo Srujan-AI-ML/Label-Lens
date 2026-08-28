@@ -13,7 +13,11 @@ export default function handler(req, res) {
         nodeVersion: process.version,
         env: {
             MONGODB_URI: hasMongoUri ? 'SET (' + mongoUriPrefix + ')' : 'NOT SET',
-            JWT_SECRET: hasJwtSecret ? 'SET' : 'NOT SET'
+            JWT_SECRET: hasJwtSecret ? 'SET' : 'NOT SET',
+            GOOGLE_CLOUD_CLIENT_EMAIL: !!process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+            VITE_GOOGLE_CLOUD_CLIENT_EMAIL: !!process.env.VITE_GOOGLE_CLOUD_CLIENT_EMAIL,
+            GOOGLE_CLOUD_PRIVATE_KEY: !!process.env.GOOGLE_CLOUD_PRIVATE_KEY,
+            VITE_GOOGLE_CLOUD_PRIVATE_KEY: !!process.env.VITE_GOOGLE_CLOUD_PRIVATE_KEY,
         }
     });
 }
