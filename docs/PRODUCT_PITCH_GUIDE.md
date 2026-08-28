@@ -46,6 +46,8 @@ Label Lens is an AI-powered instant-audit tool for Legal Metrology compliance. U
 3.  **Legal Metrology Rule 13 Compliance Check:** Calculates minimum legal font height in millimeters based on package weight.
 4.  **Instant Compliance Certificates:** Exports high-quality, signature-ready PDF violation reports.
 5.  **Repository Logs:** Maintains inspection history synchronized to a cloud database.
+6.  **Sleek GPU-Accelerated UI Transitions:** Modern, fluid animations with smooth slide-up effects when switching views, creating a premium software experience for inspectors in the field.
+7.  **Resilient OCR Date Parsing:** Handles common real-world package text defects, including typos (like "best bfore") and varying formats (like 2-digit years or MM/YYYY), ensuring dates are parsed and mapped accurately.
 
 ---
 
@@ -68,4 +70,5 @@ Enforcement directors can look at dashboard logs to see which brands routinely f
 
 *   **Cost Efficiency:** Built on Serverless Cloud architecture. Operating costs are directly proportional to usage — resulting in negligible idle hosting bills.
 *   **Hardware Agnostic:** Works on any smartphone or tablet browser without requiring expensive proprietary hardware.
+*   **Fail-Fast Connection Security:** Added 5-second database connection timeouts. If the database firewall blocks the Vercel micro-servers, the application fails fast and displays a clean error instead of leaving the UI frozen.
 *   **Fallback Reliability:** Includes robust offline and fallback scripts to guarantee that inspection records can still be managed even when field network coverage is low.

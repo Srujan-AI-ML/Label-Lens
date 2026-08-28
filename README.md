@@ -66,6 +66,13 @@ Validates all **10 mandatory declarations** required under the Legal Metrology (
 - **Persistent Products Registry**: Filterable and searchable product database with status filters (`Compliant`, `Partially Compliant`, `Non-Compliant`).
 - **Official PDF Reports**: Instant one-click print/export for digital inspection certificates with inspector field notes.
 
+### 4. ⚡ Modern Performance & User Experience (UX)
+- **Sleek GPU-Accelerated UI Transitions**: Decelerated page slide-up animations using hardware-accelerated CSS properties (`will-change`, custom cubic-bezier timing) for fluid view switching.
+- **Resilient OCR Date Extractors**: Spelling-fault-tolerant regular expression matching to read dates even with OCR typos (like "best bfore", "best befor", "best bfor").
+- **Date Normalization Pipeline**: Automatically normalizes 2-part dates (like `08/2026` or `12/26`) and 2-digit years to ISO standard `YYYY-MM-DD` inputs for seamless datepicker integration.
+- **Fail-Fast Serverless Database Connection Caching**: Reuses a cached connection pool across serverless instances to avoid connection exhaustion. Implements a 5-second database connection timeout fail-safe to prevent application hangs during cloud firewall blocks.
+- **Social Open Graph Meta Configuration**: Includes custom Open Graph and Twitter Card tags with cache-busting versioned preview banners for elegant platform sharing.
+
 ---
 
 ## 📁 Project Architecture

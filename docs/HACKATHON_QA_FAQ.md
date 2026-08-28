@@ -33,3 +33,12 @@ The app uses strict validation bindings. If the inspector leaves a field empty i
 1.  **Notice Issuance:** Inspectors can immediately export the generated compliance report as a PDF directly from the dashboard and issue a notice to the manufacturing address extracted by the app.
 2.  **Audit Trail:** Every scan registers a permanent timestamped database record, creating a tamper-proof audit log of inspections for court cases.
 3.  **Targeted Enforcement:** The government dashboard visualizes trends, identifying which brands or manufacturing zones have the highest non-compliance rates so regulatory bodies can target inspections where violations are most common.
+
+### Q6: How does the OCR scanner handle typos (like "best bfore") or non-standard date layouts commonly printed on wrinkled packages?
+**Answer:** The parsing logic in [`complianceService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/complianceService.ts) uses spelling-fault-tolerant regular expressions. It matches words even with standard character omissions (like "best bfore", "best befor", "best bfor"). Additionally, we use a custom date normalization pipeline (`formatToISODate`) to clean and format 2-part dates (like `08/26` or `12/2026`) and 2-digit years (converting `15` to `2015`) into valid `YYYY-MM-DD` standard inputs for the HTML5 datepickers.
+
+### Q7: How did you implement the UI page transitions, and did they add to your bundle size?
+**Answer:** The slide-up page transitions are implemented using native CSS animation properties (specifically keyframed `translateY` and `opacity` declarations using a standard iOS-style cubic-bezier curve). By assigning React key identifiers to our layout wrapper (`key={currentPage}`), the page re-mounts and triggers the animation naturally on every tab switch. This method uses **zero JavaScript animation library weight**, keeping the bundle size small and highly optimized.
+
+### Q8: What prevents your serverless backend from crashing or hanging if the database connection fails?
+**Answer:** Serverless endpoints on Vercel are stateless and have short execution limits. We configured a global database client pooling cache in `mongodb.js` to reuse existing database connection instances across hot-starts. Additionally, we set a 5-second connection timeout fail-safe. If the database firewall blocks Vercel's dynamic IP address, the endpoint immediately returns an HTTP 500 error within 5 seconds, stopping the frontend spinner and presenting a clean error alert instead of freezing the webpage.
