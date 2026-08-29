@@ -28,6 +28,7 @@ export default async function handler(req, res) {
                 id: p._id.toString(),
                 productName: p.productName,
                 barcode: p.barcode || null,
+                mrp: p.mrp || p.declarations?.mrp?.value || null,
                 scannedAt: p.scannedAt,
                 complianceScore: p.complianceScore,
                 complianceStatus: p.complianceStatus,
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
             const {
                 productName, barcode, scannedAt, rawExtractedText,
                 complianceScore, complianceStatus, declarations,
-                violations, imageData, category, notes
+                violations, imageData, category, notes, mrp
             } = req.body || {};
 
             if (!productName || complianceScore === undefined || !declarations) {
@@ -57,6 +58,7 @@ export default async function handler(req, res) {
                 userId: user.userId,
                 productName,
                 barcode: barcode || null,
+                mrp: mrp !== undefined ? mrp : (declarations?.mrp?.value || null),
                 scannedAt: scannedAt || new Date().toISOString(),
                 rawExtractedText: rawExtractedText || '',
                 complianceScore,

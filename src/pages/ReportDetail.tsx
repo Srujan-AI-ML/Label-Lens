@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown, Save, X } from 'lucide-react';
+import { analyseCompliance, calculateUnitSalePrice } from '../services/complianceService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -11,10 +12,159 @@ interface ReportDetailProps {
 }
 
 export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) => {
-    const { updateNotes } = useProduct();
+    const { updateNotes, updateProduct } = useProduct();
+    const [currentProduct, setCurrentProduct] = useState<ScannedProduct>(product);
+    
+    // Notes state
     const [notes, setNotes] = useState(product.notes || '');
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [isSavingNotes, setIsSavingNotes] = useState(false);
+
+    // Full Product Edit Modal state
+    const [isEditingProduct, setIsEditingProduct] = useState(false);
+    const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+    // Edit form fields
+    const [editProductName, setEditProductName] = useState('');
+    const [editBarcode, setEditBarcode] = useState('');
+    const [editMrp, setEditMrp] = useState('');
+    const [editNetQuantity, setEditNetQuantity] = useState('');
+    const [editQuantityUnit, setEditQuantityUnit] = useState('g');
+    const [editMfgDate, setEditMfgDate] = useState('');
+    const [editExpiryDate, setEditExpiryDate] = useState('');
+    const [editManufacturer, setEditManufacturer] = useState('');
+    const [editConsumerCare, setEditConsumerCare] = useState('');
+    const [editFssaiLicense, setEditFssaiLicense] = useState('');
+    const [editCountryOfOrigin, setEditCountryOfOrigin] = useState('India');
+    const [editUnitPrice, setEditUnitPrice] = useState('');
+    const [editCategory, setEditCategory] = useState('Food & Beverage');
+    const [editNotes, setEditNotes] = useState('');
+
+    useEffect(() => {
+        setCurrentProduct(product);
+        setNotes(product.notes || '');
+    }, [product]);
+
+    const openEditModal = () => {
+        const p = currentProduct;
+        setEditProductName(p.productName || '');
+        setEditBarcode(p.barcode || '');
+        
+        const rawMrp = p.mrp || p.declarations?.mrp?.value || '';
+        const cleanMrp = rawMrp ? rawMrp.replace(/^[^\d.]*/, '').trim() : '';
+        setEditMrp(cleanMrp);
+
+        const rawQty = p.declarations?.netQuantity?.value || '';
+        const qtyMatch = rawQty.match(/^([\d.]+)\s*([a-zA-Z]+)?/);
+        if (qtyMatch) {
+            setEditNetQuantity(qtyMatch[1] || '');
+            setEditQuantityUnit(qtyMatch[2] || 'g');
+        } else {
+            setEditNetQuantity(rawQty);
+            setEditQuantityUnit('g');
+        }
+
+        setEditMfgDate(p.declarations?.manufactureDate?.value || '');
+        setEditExpiryDate(p.declarations?.bestBefore?.value || '');
+        setEditManufacturer(p.declarations?.manufacturer?.value || '');
+        setEditConsumerCare(p.declarations?.consumerCare?.value || '');
+        setEditFssaiLicense(p.declarations?.fssaiLicense?.value || '');
+        setEditCountryOfOrigin(p.declarations?.countryOfOrigin?.value || 'India');
+        setEditUnitPrice(p.declarations?.retailSalePrice?.value || '');
+        setEditCategory(p.category || 'Food & Beverage');
+        setEditNotes(p.notes || '');
+
+        setIsEditingProduct(true);
+    };
+
+    const handleEditMrpChange = (val: string) => {
+        setEditMrp(val);
+        const calculated = calculateUnitSalePrice(val, editNetQuantity, editQuantityUnit);
+        if (calculated) {
+            setEditUnitPrice(calculated);
+        } else if (!val.trim()) {
+            setEditUnitPrice('');
+        }
+    };
+
+    const handleEditQuantityChange = (val: string) => {
+        setEditNetQuantity(val);
+        const calculated = calculateUnitSalePrice(editMrp, val, editQuantityUnit);
+        if (calculated) {
+            setEditUnitPrice(calculated);
+        } else if (!val.trim()) {
+            setEditUnitPrice('');
+        }
+    };
+
+    const handleEditQuantityUnitChange = (val: string) => {
+        setEditQuantityUnit(val);
+        const calculated = calculateUnitSalePrice(editMrp, editNetQuantity, val);
+        if (calculated) {
+            setEditUnitPrice(calculated);
+        }
+    };
+
+    const handleSaveProductEdit = async () => {
+        setIsSavingProduct(true);
+        try {
+            const synth = [
+                editProductName ? `Product: ${editProductName.trim()}` : '',
+                editManufacturer ? `Manufactured by: ${editManufacturer.trim()}` : '',
+                editNetQuantity ? `Net Quantity: ${editNetQuantity.trim()} ${editQuantityUnit}` : '',
+                editMrp ? `MRP: Rs. ${editMrp.trim()} (incl. of all taxes)` : '',
+                editMfgDate ? `Mfg Date: ${editMfgDate.trim()}` : '',
+                editExpiryDate ? `Best Before: ${editExpiryDate.trim()}` : '',
+                editConsumerCare ? `Consumer Care: ${editConsumerCare.trim()}` : '',
+                editFssaiLicense ? `FSSAI Lic No: ${editFssaiLicense.trim()}` : '',
+                editCountryOfOrigin ? `Country of Origin: ${editCountryOfOrigin.trim()}` : '',
+                editUnitPrice ? `Unit Sale Price: ${editUnitPrice.trim()}` : ''
+            ].filter(Boolean).join('\n');
+
+            const { declarations, violations, complianceScore, complianceStatus } = analyseCompliance(
+                synth || currentProduct.rawExtractedText || '',
+                {
+                    productName: editProductName.trim() || 'Inspected Commodity',
+                    mrp: editMrp.trim(),
+                    netQuantity: editNetQuantity.trim(),
+                    quantityUnit: editQuantityUnit,
+                    manufactureDate: editMfgDate.trim(),
+                    expiryDate: editExpiryDate.trim(),
+                    manufacturer: editManufacturer.trim(),
+                    consumerCare: editConsumerCare.trim(),
+                    fssaiLicense: editFssaiLicense.trim(),
+                    countryOfOrigin: editCountryOfOrigin.trim(),
+                    unitPrice: editUnitPrice.trim()
+                }
+            );
+
+            const mrpToSave = editMrp.trim()
+                ? (editMrp.trim().startsWith('₹') ? editMrp.trim() : `₹${editMrp.trim().replace(/[^\d.,]/g, '')}`)
+                : undefined;
+
+            const updatedRecord: Partial<ScannedProduct> = {
+                productName: editProductName.trim() || 'Inspected Commodity',
+                barcode: editBarcode.trim() || undefined,
+                mrp: mrpToSave,
+                category: editCategory || undefined,
+                notes: editNotes.trim() || undefined,
+                declarations,
+                violations,
+                complianceScore,
+                complianceStatus,
+                rawExtractedText: synth || currentProduct.rawExtractedText || ''
+            };
+
+            const saved = await updateProduct(currentProduct.id, updatedRecord);
+            setCurrentProduct(saved);
+            setNotes(saved.notes || '');
+            setIsEditingProduct(false);
+        } catch (error: any) {
+            alert('Failed to save product changes: ' + (error.message || 'Unknown error'));
+        } finally {
+            setIsSavingProduct(false);
+        }
+    };
 
     const getStatusHeaderColor = (status: string) => {
         switch (status) {
@@ -30,7 +180,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
     const handleSaveNotes = async () => {
         setIsSavingNotes(true);
         try {
-            await updateNotes(product.id, notes);
+            await updateNotes(currentProduct.id, notes);
             setIsEditingNotes(false);
         } catch (error) {
             alert('Failed to save notes');
@@ -45,159 +195,138 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
 
     const handleDownloadPDF = () => {
         try {
-            const doc = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4'
-            });
-
-            // 1. Header Banner Style (Premium Blue)
-            doc.setFillColor(29, 78, 216); // Royal Blue
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            doc.setFillColor(29, 78, 216);
             doc.rect(0, 0, 210, 40, 'F');
-
-            // Logo & Title inside Banner
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(22);
             doc.setTextColor(255, 255, 255);
             doc.text('LABEL LENS', 15, 18);
-
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(219, 234, 254);
             doc.text('COMPLIANCE INSPECTION CERTIFICATE', 15, 25);
-            doc.text(`Certificate ID: ${product.id}`, 15, 30);
-
-            // Compliance Score Badge inside Banner
+            doc.text(`Certificate ID: ${currentProduct.id}`, 15, 30);
             doc.setFillColor(255, 255, 255);
             doc.roundedRect(160, 8, 35, 24, 3, 3, 'F');
-
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(8);
             doc.setTextColor(75, 85, 99);
             doc.text('SCORE', 177, 14, { align: 'center' });
-
             doc.setFontSize(16);
             doc.setTextColor(29, 78, 216);
-            doc.text(`${product.complianceScore}%`, 177, 21, { align: 'center' });
-
+            doc.text(`${currentProduct.complianceScore}%`, 177, 21, { align: 'center' });
             doc.setFontSize(7);
             doc.setTextColor(107, 114, 128);
-            doc.text(product.complianceStatus.toUpperCase(), 177, 26, { align: 'center' });
-
-            // 2. Product Information Block
+            doc.text(currentProduct.complianceStatus.toUpperCase(), 177, 26, { align: 'center' });
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(12);
             doc.setTextColor(31, 41, 55);
             doc.text('Product Information', 15, 52);
-
             doc.setLineWidth(0.5);
             doc.setDrawColor(229, 231, 235);
             doc.line(15, 54, 195, 54);
-
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
             doc.text('Product Name:', 15, 62);
             doc.setFont('helvetica', 'normal');
-            doc.text(product.productName, 45, 62);
-
+            doc.text(currentProduct.productName, 45, 62);
             doc.setFont('helvetica', 'bold');
             doc.text('Barcode GTIN:', 15, 68);
             doc.setFont('helvetica', 'normal');
-            doc.text(product.barcode || 'N/A', 45, 68);
-
+            doc.text(currentProduct.barcode || 'N/A', 45, 68);
             doc.setFont('helvetica', 'bold');
             doc.text('Category:', 15, 74);
             doc.setFont('helvetica', 'normal');
-            doc.text(product.category || 'Food & Beverage', 45, 74);
-
+            doc.text(currentProduct.category || 'Food & Beverage', 45, 74);
             doc.setFont('helvetica', 'bold');
             doc.text('Scan Date:', 15, 80);
             doc.setFont('helvetica', 'normal');
-            doc.text(new Date(product.scannedAt).toLocaleString(), 45, 80);
-
-            // 3. Declarations Checklist Table
+            doc.text(new Date(currentProduct.scannedAt).toLocaleString(), 45, 80);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(12);
-            doc.text('Mandatory Declarations Checklist', 15, 92);
-            doc.line(15, 94, 195, 94);
-
-            const decHeaders = [['Declaration Item', 'Status', 'Verified Value / Content Found']];
-            const decRows = [
-                ['Generic Name', product.declarations.genericName?.present ? 'PASS' : 'FAIL', product.declarations.genericName?.value || 'N/A'],
-                ['Net Quantity', product.declarations.netQuantity?.present ? 'PASS' : 'FAIL', product.declarations.netQuantity?.value || 'N/A'],
-                ['MRP Price', product.declarations.mrp?.present ? 'PASS' : 'FAIL', product.declarations.mrp?.value || 'N/A'],
-                ['Mfg Date', product.declarations.manufactureDate?.present ? 'PASS' : 'FAIL', product.declarations.manufactureDate?.value || 'N/A'],
-                ['Expiry Date', product.declarations.bestBefore?.present ? 'PASS' : 'FAIL', product.declarations.bestBefore?.value || 'N/A'],
-                ['Manufacturer', product.declarations.manufacturer?.present ? 'PASS' : 'FAIL', product.declarations.manufacturer?.value || 'N/A'],
-                ['Consumer Care', product.declarations.consumerCare?.present ? 'PASS' : 'FAIL', product.declarations.consumerCare?.value || 'N/A'],
-                ['FSSAI License', product.declarations.fssaiLicense?.present ? 'PASS' : 'FAIL', product.declarations.fssaiLicense?.value || 'N/A'],
-                ['Country of Origin', product.declarations.countryOfOrigin?.present ? 'PASS' : 'FAIL', product.declarations.countryOfOrigin?.value || 'N/A'],
-                ['Unit Retail Price', product.declarations.retailSalePrice?.present ? 'PASS' : 'FAIL', product.declarations.retailSalePrice?.value || 'N/A'],
+            doc.setTextColor(31, 41, 55);
+            doc.text('Mandatory Declarations Audit (Rules, 2011)', 15, 92);
+            const tableRows = [
+                ['Generic / Product Name', currentProduct.declarations.genericName.present ? 'PASS' : 'FAIL', currentProduct.declarations.genericName.value || 'Missing', 'Mandatory'],
+                ['Net Quantity', currentProduct.declarations.netQuantity.present ? 'PASS' : 'FAIL', currentProduct.declarations.netQuantity.value || 'Missing', 'Mandatory'],
+                ['Maximum Retail Price (MRP)', currentProduct.declarations.mrp.present ? 'PASS' : 'FAIL', currentProduct.declarations.mrp.value || currentProduct.mrp || 'Missing', 'Mandatory'],
+                ['Date of Manufacture / Packing', currentProduct.declarations.manufactureDate.present ? 'PASS' : 'FAIL', currentProduct.declarations.manufactureDate.value || 'Missing', 'Mandatory'],
+                ['Best Before / Expiry Date', currentProduct.declarations.bestBefore.present ? 'PASS' : 'FAIL', currentProduct.declarations.bestBefore.value || 'Missing', 'Mandatory'],
+                ['Manufacturer & Address', currentProduct.declarations.manufacturer.present ? 'PASS' : 'FAIL', currentProduct.declarations.manufacturer.value || 'Missing', 'Mandatory'],
+                ['Consumer Care Helpline', currentProduct.declarations.consumerCare.present ? 'PASS' : 'FAIL', currentProduct.declarations.consumerCare.value || 'Missing', 'Mandatory'],
+                ['FSSAI License Number', currentProduct.declarations.fssaiLicense.present ? 'PASS' : 'FAIL', currentProduct.declarations.fssaiLicense.value || 'Missing', 'Required for Food'],
+                ['Country of Origin', currentProduct.declarations.countryOfOrigin.present ? 'PASS' : 'FAIL', currentProduct.declarations.countryOfOrigin.value || 'Missing', 'Mandatory if Imported'],
+                ['Unit Sale Price (USP)', currentProduct.declarations.retailSalePrice.present ? 'PASS' : 'FAIL', currentProduct.declarations.retailSalePrice.value || 'Missing', 'Recommended']
             ];
-
             autoTable(doc, {
-                startY: 98,
-                head: decHeaders,
-                body: decRows,
-                theme: 'grid',
-                headStyles: { fillColor: [29, 78, 216], textColor: [255, 255, 255] },
-                columnStyles: {
-                    0: { cellWidth: 45 },
-                    1: { cellWidth: 20, fontStyle: 'bold' },
-                    2: { cellWidth: 115 }
-                },
-                styles: { fontSize: 8 },
+                startY: 96,
+                head: [['Declaration Field', 'Status', 'Extracted / Entered Value', 'Requirement']],
+                body: tableRows,
+                theme: 'striped',
+                headStyles: { fillColor: [29, 78, 216], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+                bodyStyles: { fontSize: 8, textColor: [55, 65, 81] },
+                columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold' }, 1: { cellWidth: 20 }, 2: { cellWidth: 80 }, 3: { cellWidth: 35 } },
                 didParseCell: (data) => {
                     if (data.column.index === 1) {
-                        if (data.cell.text[0] === 'PASS') {
-                            data.cell.styles.textColor = [16, 185, 129]; // Green
+                        if (data.cell.raw === 'PASS') {
+                            data.cell.styles.textColor = [16, 185, 129];
+                            data.cell.styles.fontStyle = 'bold';
                         } else {
-                            data.cell.styles.textColor = [239, 68, 68]; // Red
+                            data.cell.styles.textColor = [239, 68, 68];
+                            data.cell.styles.fontStyle = 'bold';
                         }
                     }
                 }
             });
-
-            // 4. Violations Summary
-            const finalY = (doc as any).lastAutoTable.finalY + 12;
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text('Compliance Violations & Causes', 15, finalY);
-            doc.line(15, finalY + 2, 195, finalY + 2);
-
-            const violations = product.violations || [];
-            doc.setFontSize(9);
-            if (violations.length === 0) {
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(16, 185, 129);
-                doc.text('Product complies fully with all mandatory declarations guidelines.', 15, finalY + 8);
-            } else {
-                let currentY = finalY + 8;
-                violations.forEach((v, idx) => {
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(220, 38, 38);
-                    doc.text(`${idx + 1}. [${v.severity.toUpperCase()}] ${v.label}:`, 15, currentY);
-                    
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(75, 85, 99);
-                    doc.text(v.message, 15, currentY + 4.5);
-                    currentY += 10;
+            let finalY = (doc as any).lastAutoTable.finalY + 10;
+            if (currentProduct.violations && currentProduct.violations.length > 0) {
+                if (finalY > 230) { doc.addPage(); finalY = 20; }
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(11);
+                doc.setTextColor(185, 28, 28);
+                doc.text(`Rule Violations Detected (${currentProduct.violations.length})`, 15, finalY);
+                const violationRows = currentProduct.violations.map((v, i) => [ `${i + 1}`, v.severity.toUpperCase(), v.label, v.message ]);
+                autoTable(doc, {
+                    startY: finalY + 4,
+                    head: [['#', 'Severity', 'Rule Area', 'Deficiency Details']],
+                    body: violationRows,
+                    theme: 'plain',
+                    headStyles: { fillColor: [254, 226, 226], textColor: [153, 27, 27], fontStyle: 'bold', fontSize: 8 },
+                    bodyStyles: { fontSize: 7.5, textColor: [127, 29, 29] },
+                    columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 25, fontStyle: 'bold' }, 2: { cellWidth: 50, fontStyle: 'bold' }, 3: { cellWidth: 100 } }
                 });
+                finalY = (doc as any).lastAutoTable.finalY + 10;
             }
-
-            // Footer
-            doc.setFontSize(8);
-            doc.setTextColor(156, 163, 175);
-            doc.text('Label Lens Digital Certification System • Verified Copy', 15, 285);
-
-            doc.save(`Label_Lens_Certificate_${product.productName.replace(/\s+/g, '_')}.pdf`);
+            if (currentProduct.notes) {
+                if (finalY > 240) { doc.addPage(); finalY = 20; }
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(31, 41, 55);
+                doc.text('Inspector Field Notes:', 15, finalY);
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(8.5);
+                doc.setTextColor(75, 85, 99);
+                doc.text(currentProduct.notes, 15, finalY + 5, { maxWidth: 180 });
+            }
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7.5);
+                doc.setTextColor(156, 163, 175);
+                doc.text('Generated by Label Lens Verification System', 15, 290);
+                doc.text(`Page ${i} of ${pageCount}`, 195, 290, { align: 'right' });
+            }
+            const safeName = currentProduct.productName.replace(/[^a-zA-Z0-9]/g, '_');
+            doc.save(`Label_Lens_${safeName}_Certificate.pdf`);
         } catch (err: any) {
-            console.error('Error generating product PDF:', err);
+            console.error('Failed to generate PDF:', err);
             alert('Failed to generate PDF: ' + err.message);
         }
     };
 
-    const declarationLabels: Record<keyof typeof product.declarations, { label: string; desc: string; mandatory: boolean }> = {
+    const declarationLabels: Record<keyof typeof currentProduct.declarations, { label: string; desc: string; mandatory: boolean }> = {
         genericName: { label: 'Generic / Common Name', desc: 'Generic description of product', mandatory: true },
         netQuantity: { label: 'Net Quantity', desc: 'Standard weight, volume, or count declaration', mandatory: true },
         mrp: { label: 'Maximum Retail Price (MRP)', desc: 'Consumer price inclusive of all taxes', mandatory: true },
@@ -212,7 +341,6 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 printable-report">
-            {/* Action Bar (hidden in print) */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 no-print">
                 <button
                     onClick={onBack}
@@ -223,6 +351,13 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 </button>
 
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={openEditModal}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer"
+                    >
+                        <Edit2 size={16} />
+                        Edit Product
+                    </button>
                     <button
                         onClick={handlePrint}
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer"
@@ -240,41 +375,44 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 </div>
             </div>
 
-            {/* Main Report Container */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700/50 shadow-lg">
-                {/* Header Card */}
-                <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(product.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
+                <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(currentProduct.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
                     <div>
                         <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
                             Official Label Lens Inspection Certificate
                         </span>
-                        <h1 className="text-2xl md:text-3xl font-black mt-2">{product.productName}</h1>
+                        <h1 className="text-2xl md:text-3xl font-black mt-2">{currentProduct.productName}</h1>
                         <p className="text-xs text-white/80 mt-1">
-                            Inspection ID: {product.id} • Date: {new Date(product.scannedAt).toLocaleString()}
+                            Inspection ID: {currentProduct.id} • Date: {new Date(currentProduct.scannedAt).toLocaleString()}
                         </p>
                     </div>
                     <div className="text-center sm:text-right">
                         <p className="text-[10px] uppercase font-bold tracking-widest text-white/80">Compliance Score</p>
-                        <p className="text-5xl font-black mt-1">{product.complianceScore}%</p>
+                        <p className="text-5xl font-black mt-1">{currentProduct.complianceScore}%</p>
                         <p className="text-sm font-bold mt-1 bg-white/20 px-3 py-1 rounded-full inline-block">
-                            {product.complianceStatus}
+                            {currentProduct.complianceStatus}
                         </p>
                     </div>
                 </div>
 
                 <div className="p-8">
-                    {/* Basic Info Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 pb-8 border-b border-gray-100 dark:border-gray-700/50">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 pb-8 border-b border-gray-100 dark:border-gray-700/50">
                         <div>
                             <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Product Barcode</span>
                             <span className="font-mono font-bold text-gray-900 dark:text-white mt-1 block">
-                                {product.barcode || 'Not Detected'}
+                                {currentProduct.barcode || 'Not Detected'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">MRP (Price)</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
+                                {currentProduct.mrp || currentProduct.declarations?.mrp?.value || 'Not Set'}
                             </span>
                         </div>
                         <div>
                             <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Category</span>
                             <span className="font-bold text-gray-900 dark:text-white mt-1 block">
-                                {product.category || 'Packaged Commodity'}
+                                {currentProduct.category || 'Packaged Commodity'}
                             </span>
                         </div>
                         <div>
@@ -285,32 +423,40 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
                     </div>
 
-                    {/* Left/Right layout for image preview and checklist */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                        {/* Packaging Evidence Image */}
                         <div className="lg:col-span-1">
                             <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Packaging Photo Evidence</h3>
                             <div className="w-full h-72 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden flex items-center justify-center text-5xl">
-                                {product.imageData ? (
-                                    <img src={product.imageData} alt="Product label photo" className="w-full h-full object-contain bg-black" />
+                                {currentProduct.imageData ? (
+                                    <img src={currentProduct.imageData} alt="Product label photo" className="w-full h-full object-contain bg-black" />
                                 ) : (
                                     '📦'
                                 )}
                             </div>
                         </div>
 
-                        {/* List of declarations check */}
                         <div className="lg:col-span-2">
-                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">
-                                Rules, 2011 Declaration Checklist
-                            </h3>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase">
+                                    Rules, 2011 Declaration Checklist
+                                </h3>
+                                <button
+                                    onClick={openEditModal}
+                                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                    <Edit2 size={12} /> Edit Details
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 {(Object.keys(declarationLabels) as Array<keyof typeof declarationLabels>).map((key) => {
-                                    const item = product.declarations[key] || { present: false, value: null };
+                                    const item = currentProduct.declarations[key] || { present: false, value: null };
                                     const meta = declarationLabels[key];
+                                    const displayValue = key === 'mrp' && !item.value && currentProduct.mrp ? currentProduct.mrp : item.value;
+                                    const isPresent = item.present || (key === 'mrp' && Boolean(currentProduct.mrp));
+
                                     return (
                                         <div key={key} className={`flex items-center justify-between gap-4 p-3.5 rounded-2xl border ${
-                                            item.present
+                                            isPresent
                                                 ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
                                                 : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/30'
                                         }`}>
@@ -318,7 +464,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                                 <div className="flex items-center gap-2">
                                                     <input
                                                         type="checkbox"
-                                                        checked={item.present}
+                                                        checked={isPresent}
                                                         readOnly
                                                         className="w-4 h-4 rounded text-blue-655 cursor-default"
                                                     />
@@ -329,14 +475,14 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                                         </span>
                                                     )}
                                                 </div>
-                                                {item.present && item.value && (
+                                                {isPresent && displayValue && (
                                                     <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700 px-2.5 py-1 rounded-lg mt-1.5 inline-block max-w-[380px] truncate">
-                                                        "{item.value}"
+                                                        "{displayValue}"
                                                     </p>
                                                 )}
                                             </div>
                                             <div className="shrink-0">
-                                                {item.present ? (
+                                                {isPresent ? (
                                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
                                                         ✔️ Pass
                                                     </span>
@@ -353,19 +499,18 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
                     </div>
 
-                    {/* Violations Summary */}
                     <div className="mb-8 p-6 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-2xl">
                         <h3 className="text-sm font-bold text-rose-800 dark:text-rose-400 flex items-center gap-2 mb-4">
                             <AlertTriangle size={18} />
-                            Non-Compliance & Violations Summary ({product.violations.length})
+                            Non-Compliance & Violations Summary ({currentProduct.violations.length})
                         </h3>
-                        {product.violations.length === 0 ? (
+                        {currentProduct.violations.length === 0 ? (
                             <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
                                 No packaging rule violations found. All mandatory declarations met.
                             </p>
                         ) : (
                             <div className="space-y-3">
-                                {product.violations.map((v, i) => (
+                                {currentProduct.violations.map((v, i) => (
                                     <div key={i} className="flex gap-2 text-xs">
                                         <span className={`px-2 py-0.5 rounded font-bold uppercase text-[9px] h-fit mt-0.5 shrink-0 ${
                                             v.severity === 'critical' ? 'bg-red-100 text-red-700' :
@@ -382,7 +527,6 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         )}
                     </div>
 
-                    {/* Inspector Notes Section */}
                     <div className="no-print">
                         <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Inspector Field Notes</h3>
                         {isEditingNotes ? (
@@ -413,7 +557,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         ) : (
                             <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-start justify-between gap-4">
                                 <div className="text-xs text-gray-600 dark:text-gray-300 italic">
-                                    {product.notes || 'No inspector field notes added yet.'}
+                                    {currentProduct.notes || 'No inspector field notes added yet.'}
                                 </div>
                                 <button
                                     onClick={() => setIsEditingNotes(true)}
@@ -427,6 +571,235 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     </div>
                 </div>
             </div>
+
+            {isEditingProduct && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto no-print">
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-3xl w-full border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden my-8">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Edit2 size={20} className="text-emerald-600" />
+                                    Edit Product Declarations & Details
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Modify existing values, add missing fields, or clear unwanted information.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsEditingProduct(false)}
+                                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        🏷️ Product Name / Identity *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editProductName}
+                                        onChange={(e) => setEditProductName(e.target.value)}
+                                        placeholder="e.g. Parle-G Biscuits"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        🔍 Barcode / GTIN Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editBarcode}
+                                        onChange={(e) => setEditBarcode(e.target.value)}
+                                        placeholder="e.g. 8901030383848"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        💰 Maximum Retail Price (MRP ₹) *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editMrp}
+                                        onChange={(e) => handleEditMrpChange(e.target.value)}
+                                        placeholder="e.g. 249.00"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        ⚖️ Net Quantity & Unit *
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={editNetQuantity}
+                                            onChange={(e) => handleEditQuantityChange(e.target.value)}
+                                            placeholder="e.g. 500"
+                                            className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                        />
+                                        <select
+                                            value={editQuantityUnit}
+                                            onChange={(e) => handleEditQuantityUnitChange(e.target.value)}
+                                            className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                        >
+                                            <option value="g">g</option>
+                                            <option value="kg">kg</option>
+                                            <option value="ml">ml</option>
+                                            <option value="L">L</option>
+                                            <option value="pcs">pcs</option>
+                                            <option value="units">units</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📅 Date of Manufacture / Packing
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editMfgDate}
+                                        onChange={(e) => setEditMfgDate(e.target.value)}
+                                        placeholder="e.g. 05/2026 or 2026-05-10"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        ⌛ Best Before / Expiry Date
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editExpiryDate}
+                                        onChange={(e) => setEditExpiryDate(e.target.value)}
+                                        placeholder="e.g. 12/2026 or 9 months from mfg"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="sm:col-span-2 p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        🏭 Manufacturer / Packer Name & Full Address *
+                                    </label>
+                                    <textarea
+                                        rows={2}
+                                        value={editManufacturer}
+                                        onChange={(e) => setEditManufacturer(e.target.value)}
+                                        placeholder="e.g. Parle Products Pvt Ltd, North Level Crossing, Vile Parle East, Mumbai - 400057"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📞 Consumer Care Helpline / Email *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editConsumerCare}
+                                        onChange={(e) => setEditConsumerCare(e.target.value)}
+                                        placeholder="e.g. 1800-22-7799 / customercare@parle.biz"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        🛡️ FSSAI License No. (14 digits)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editFssaiLicense}
+                                        onChange={(e) => setEditFssaiLicense(e.target.value)}
+                                        placeholder="e.g. 10012022000046"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        🌐 Country of Origin
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editCountryOfOrigin}
+                                        onChange={(e) => setEditCountryOfOrigin(e.target.value)}
+                                        placeholder="e.g. India"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        💵 Unit Sale Price (USP)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editUnitPrice}
+                                        onChange={(e) => setEditUnitPrice(e.target.value)}
+                                        placeholder="e.g. ₹0.20 per gram"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                            📦 Commodity Category
+                                        </label>
+                                        <select
+                                            value={editCategory}
+                                            onChange={(e) => setEditCategory(e.target.value)}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                        >
+                                            <option value="Food & Beverage">Food & Beverage</option>
+                                            <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
+                                            <option value="Pharmaceuticals & Drugs">Pharmaceuticals & Drugs</option>
+                                            <option value="Electronics & Appliances">Electronics & Appliances</option>
+                                            <option value="Apparel & Textiles">Apparel & Textiles</option>
+                                            <option value="Household Commodities">Household Commodities</option>
+                                            <option value="General Packaged Commodity">General Packaged Commodity</option>
+                                        </select>
+                                    </div>
+                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                            📝 Inspector Notes
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editNotes}
+                                            onChange={(e) => setEditNotes(e.target.value)}
+                                            placeholder="e.g. Verified at retail store inspection"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-800/50">
+                            <button
+                                onClick={() => setIsEditingProduct(false)}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveProductEdit}
+                                disabled={isSavingProduct}
+                                className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                            >
+                                {isSavingProduct ? (
+                                    <>Saving Changes...</>
+                                ) : (
+                                    <>
+                                        <Save size={16} /> Save Changes
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

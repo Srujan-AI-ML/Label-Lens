@@ -47,6 +47,7 @@ export interface ScannedProduct {
   declarations: ComplianceDeclarations;
   violations: Violation[];
   imageData?: string;                   // base64 thumbnail (optional)
+  mrp?: string | null;                  // Maximum Retail Price
   category?: string;                    // Food / Cosmetic / Drug / Other
   notes?: string;                       // Inspector notes
 }

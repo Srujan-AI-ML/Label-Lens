@@ -8,6 +8,7 @@ type ProductContextType = {
     isLoading: boolean;
     stats: ComplianceStats;
     addScanResult: (product: Omit<ScannedProduct, 'id'>) => Promise<ScannedProduct>;
+    updateProduct: (id: string, updatedData: Partial<ScannedProduct>) => Promise<ScannedProduct>;
     updateNotes: (id: string, notes: string) => Promise<void>;
     removeScanRecord: (id: string) => Promise<void>;
     refetchProducts: () => Promise<void>;
@@ -134,6 +135,31 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const updateProduct = async (id: string, updatedData: Partial<ScannedProduct>): Promise<ScannedProduct> => {
+        let finalProduct: ScannedProduct | undefined;
+        setProducts(prev => prev.map(p => {
+            if (p.id === id) {
+                finalProduct = { ...p, ...updatedData };
+                return finalProduct;
+            }
+            return p;
+        }));
+
+        try {
+            if (!id.startsWith('temp-')) {
+                const serverSaved = await productsAPI.update(id, updatedData);
+                if (serverSaved && serverSaved.id) {
+                    setProducts(prev => prev.map(p => p.id === id ? serverSaved : p));
+                    return serverSaved;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to update product on server:', error);
+        }
+
+        return finalProduct || (updatedData as ScannedProduct);
+    };
+
     const updateNotes = async (id: string, notes: string) => {
         setProducts(prev => prev.map(p => p.id === id ? { ...p, notes } : p));
         try {
@@ -163,6 +189,7 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
                 isLoading,
                 stats,
                 addScanResult,
+                updateProduct,
                 updateNotes,
                 removeScanRecord,
                 refetchProducts

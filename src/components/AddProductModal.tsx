@@ -382,7 +382,19 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             const finalName = productName.trim() || 'Inspected Commodity';
             const scanData = buildScanResult(
                 synthesizedText,
-                finalName,
+                {
+                    productName: finalName,
+                    mrp: mrp.trim(),
+                    netQuantity: netQuantity.trim(),
+                    quantityUnit: quantityUnit,
+                    manufactureDate: mfgDate.trim(),
+                    expiryDate: expiryDate.trim(),
+                    manufacturer: manufacturer.trim(),
+                    consumerCare: consumerCare.trim(),
+                    fssaiLicense: fssaiLicense.trim(),
+                    countryOfOrigin: countryOfOrigin.trim(),
+                    unitPrice: unitPrice.trim()
+                },
                 barcode.trim() || undefined,
                 imagePreview || undefined
             );

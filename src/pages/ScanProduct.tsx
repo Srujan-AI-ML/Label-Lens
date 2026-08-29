@@ -394,7 +394,24 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setIsScanning(true);
         try {
             const nameToUse = productName.trim() || 'Inspected Commodity';
-            const scanData = buildScanResult(synthesizedText, nameToUse, barcode.trim() || undefined, imagePreview || undefined);
+            const scanData = buildScanResult(
+                synthesizedText,
+                {
+                    productName: nameToUse,
+                    mrp: mrp.trim(),
+                    netQuantity: netQuantity.trim(),
+                    quantityUnit: quantityUnit,
+                    manufactureDate: mfgDate.trim(),
+                    expiryDate: expiryDate.trim(),
+                    manufacturer: manufacturer.trim(),
+                    consumerCare: consumerCare.trim(),
+                    fssaiLicense: fssaiLicense.trim(),
+                    countryOfOrigin: countryOfOrigin.trim(),
+                    unitPrice: unitPrice.trim()
+                },
+                barcode.trim() || undefined,
+                imagePreview || undefined
+            );
             scanData.category = category;
             scanData.notes = notes;
 

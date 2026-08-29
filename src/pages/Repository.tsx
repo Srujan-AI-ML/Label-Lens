@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Package } from 'lucide-react';
+import { Search, Filter, Trash2, Calendar, FileText, ArrowLeft, Package, Edit2 } from 'lucide-react';
 import type { ScannedProduct } from '../types';
 import type { PageType } from '../App';
 import { jsPDF } from 'jspdf';
@@ -258,6 +258,13 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                                                     title="View Report"
                                                 >
                                                     <FileText size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => onSelectProduct(p)}
+                                                    className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-lg transition-colors"
+                                                    title="Edit Product"
+                                                >
+                                                    <Edit2 size={16} />
                                                 </button>
                                                 <button
                                                     onClick={(e) => handleDelete(e, p.id)}

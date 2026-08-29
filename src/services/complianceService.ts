@@ -374,39 +374,77 @@ export function analyseCompliance(
 
   // Form value overrides: If user entered or scanned valid form values, update declaration state
   if (formValues) {
-    if (formValues.productName && formValues.productName.trim() && formValues.productName !== 'Could not identify product') {
-      declarations.genericName = makeDeclaration(true, formValues.productName.trim(), 'high');
+    if (formValues.productName !== undefined) {
+      if (formValues.productName.trim() && formValues.productName !== 'Could not identify product') {
+        declarations.genericName = makeDeclaration(true, formValues.productName.trim(), 'high');
+      } else {
+        declarations.genericName = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.mrp && formValues.mrp.trim() !== '') {
+    if (formValues.mrp !== undefined) {
       const cleanNum = formValues.mrp.replace(/[^\d.,]/g, '');
       if (cleanNum && !isNaN(parseFloat(cleanNum)) && parseFloat(cleanNum) > 0) {
         declarations.mrp = makeDeclaration(true, `₹${cleanNum}`, 'high');
+      } else {
+        declarations.mrp = makeDeclaration(false, null, 'low');
       }
     }
-    if (formValues.netQuantity && formValues.netQuantity.trim() !== '') {
-      const val = `${formValues.netQuantity.trim()} ${formValues.quantityUnit || ''}`.trim();
-      declarations.netQuantity = makeDeclaration(true, val, 'high');
+    if (formValues.netQuantity !== undefined) {
+      if (formValues.netQuantity.trim() !== '') {
+        const val = `${formValues.netQuantity.trim()} ${formValues.quantityUnit || ''}`.trim();
+        declarations.netQuantity = makeDeclaration(true, val, 'high');
+      } else {
+        declarations.netQuantity = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.manufactureDate && formValues.manufactureDate.trim() !== '') {
-      declarations.manufactureDate = makeDeclaration(true, formValues.manufactureDate.trim(), 'high');
+    if (formValues.manufactureDate !== undefined) {
+      if (formValues.manufactureDate.trim() !== '') {
+        declarations.manufactureDate = makeDeclaration(true, formValues.manufactureDate.trim(), 'high');
+      } else {
+        declarations.manufactureDate = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.expiryDate && formValues.expiryDate.trim() !== '') {
-      declarations.bestBefore = makeDeclaration(true, formValues.expiryDate.trim(), 'high');
+    if (formValues.expiryDate !== undefined) {
+      if (formValues.expiryDate.trim() !== '') {
+        declarations.bestBefore = makeDeclaration(true, formValues.expiryDate.trim(), 'high');
+      } else {
+        declarations.bestBefore = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.manufacturer && formValues.manufacturer.trim() !== '') {
-      declarations.manufacturer = makeDeclaration(true, formValues.manufacturer.trim(), 'high');
+    if (formValues.manufacturer !== undefined) {
+      if (formValues.manufacturer.trim() !== '') {
+        declarations.manufacturer = makeDeclaration(true, formValues.manufacturer.trim(), 'high');
+      } else {
+        declarations.manufacturer = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.consumerCare && formValues.consumerCare.trim() !== '') {
-      declarations.consumerCare = makeDeclaration(true, formValues.consumerCare.trim(), 'high');
+    if (formValues.consumerCare !== undefined) {
+      if (formValues.consumerCare.trim() !== '') {
+        declarations.consumerCare = makeDeclaration(true, formValues.consumerCare.trim(), 'high');
+      } else {
+        declarations.consumerCare = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.fssaiLicense && formValues.fssaiLicense.trim() !== '') {
-      declarations.fssaiLicense = makeDeclaration(true, formValues.fssaiLicense.trim(), 'high');
+    if (formValues.fssaiLicense !== undefined) {
+      if (formValues.fssaiLicense.trim() !== '') {
+        declarations.fssaiLicense = makeDeclaration(true, formValues.fssaiLicense.trim(), 'high');
+      } else {
+        declarations.fssaiLicense = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.countryOfOrigin && formValues.countryOfOrigin.trim() !== '') {
-      declarations.countryOfOrigin = makeDeclaration(true, formValues.countryOfOrigin.trim(), 'high');
+    if (formValues.countryOfOrigin !== undefined) {
+      if (formValues.countryOfOrigin.trim() !== '') {
+        declarations.countryOfOrigin = makeDeclaration(true, formValues.countryOfOrigin.trim(), 'high');
+      } else {
+        declarations.countryOfOrigin = makeDeclaration(false, null, 'low');
+      }
     }
-    if (formValues.unitPrice && formValues.unitPrice.trim() !== '') {
-      declarations.retailSalePrice = makeDeclaration(true, formValues.unitPrice.trim(), 'high');
+    if (formValues.unitPrice !== undefined) {
+      if (formValues.unitPrice.trim() !== '') {
+        declarations.retailSalePrice = makeDeclaration(true, formValues.unitPrice.trim(), 'high');
+      } else {
+        declarations.retailSalePrice = makeDeclaration(false, null, 'low');
+      }
     }
   } else if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim() && productName !== 'Could not identify product') {
     declarations.genericName = makeDeclaration(true, productName.trim(), 'high');
@@ -611,11 +649,17 @@ export function validateProductSpecifics(data: {
 // Build a full ScannedProduct object
 export function buildScanResult(
   rawText: string,
-  productName: string,
+  productNameOrOverrides: string | FormSpecificsOverride,
   barcode?: string,
   imageData?: string
 ): Omit<ScannedProduct, 'id'> {
-  const { declarations, violations, complianceScore, complianceStatus } = analyseCompliance(rawText, productName);
+  const { declarations, violations, complianceScore, complianceStatus } = analyseCompliance(rawText, productNameOrOverrides);
+  const productName = typeof productNameOrOverrides === 'string'
+    ? productNameOrOverrides
+    : (productNameOrOverrides?.productName || 'Inspected Commodity');
+  const mrpVal = typeof productNameOrOverrides === 'object' && productNameOrOverrides.mrp !== undefined
+    ? (productNameOrOverrides.mrp.trim() ? (productNameOrOverrides.mrp.startsWith('₹') ? productNameOrOverrides.mrp : `₹${productNameOrOverrides.mrp.replace(/[^\d.,]/g, '')}`) : null)
+    : (declarations.mrp?.value || null);
   return {
     productName,
     barcode,
@@ -626,6 +670,7 @@ export function buildScanResult(
     declarations,
     violations,
     imageData,
+    mrp: mrpVal,
   };
 }
 

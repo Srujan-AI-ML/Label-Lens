@@ -39,6 +39,7 @@ export default async function handler(req, res) {
                 id: existingProduct._id.toString(),
                 productName: existingProduct.productName,
                 barcode: existingProduct.barcode || null,
+                mrp: existingProduct.mrp || existingProduct.declarations?.mrp?.value || null,
                 scannedAt: existingProduct.scannedAt,
                 complianceScore: existingProduct.complianceScore,
                 complianceStatus: existingProduct.complianceStatus,
@@ -51,12 +52,39 @@ export default async function handler(req, res) {
             });
         }
 
-        // PUT - Update notes or metadata on scan record
+        // PUT - Update scan record and declarations
         if (req.method === 'PUT') {
-            const { notes, productName } = req.body || {};
+            const {
+                productName,
+                barcode,
+                mrp,
+                category,
+                notes,
+                declarations,
+                violations,
+                complianceScore,
+                complianceStatus,
+                rawExtractedText,
+                imageData
+            } = req.body || {};
+
             const updates = {};
-            if (notes !== undefined) updates.notes = notes;
             if (productName !== undefined) updates.productName = productName;
+            if (barcode !== undefined) updates.barcode = barcode || null;
+            if (mrp !== undefined) {
+                updates.mrp = mrp || null;
+            } else if (declarations?.mrp !== undefined) {
+                updates.mrp = declarations.mrp.value || null;
+            }
+            if (category !== undefined) updates.category = category || null;
+            if (notes !== undefined) updates.notes = notes || null;
+            if (declarations !== undefined) updates.declarations = declarations;
+            if (violations !== undefined) updates.violations = violations;
+            if (complianceScore !== undefined) updates.complianceScore = complianceScore;
+            if (complianceStatus !== undefined) updates.complianceStatus = complianceStatus;
+            if (rawExtractedText !== undefined) updates.rawExtractedText = rawExtractedText;
+            if (imageData !== undefined) updates.imageData = imageData;
+            updates.updatedAt = new Date();
 
             await col.updateOne(
                 { _id: new ObjectId(id) },
@@ -68,6 +96,7 @@ export default async function handler(req, res) {
                 id: updatedProduct._id.toString(),
                 productName: updatedProduct.productName,
                 barcode: updatedProduct.barcode || null,
+                mrp: updatedProduct.mrp || updatedProduct.declarations?.mrp?.value || null,
                 scannedAt: updatedProduct.scannedAt,
                 complianceScore: updatedProduct.complianceScore,
                 complianceStatus: updatedProduct.complianceStatus,
