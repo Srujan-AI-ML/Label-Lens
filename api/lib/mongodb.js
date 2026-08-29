@@ -21,7 +21,8 @@ export async function connectToDatabase() {
 
     const client = new MongoClient(uri, options);
     await client.connect();
-    const db = client.db('smartbite');
+    const dbName = process.env.MONGODB_DB_NAME || 'smartbite';
+    const db = client.db(dbName);
 
     cachedClient = client;
     cachedDb = db;

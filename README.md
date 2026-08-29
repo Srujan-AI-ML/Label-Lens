@@ -69,7 +69,7 @@ Configure the following environment variables in your local `.env` file or in Ve
 
 ```env
 # MongoDB Atlas Database URI (Required)
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/smartbite
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/labellens
 
 # JWT Secret Key (Required)
 JWT_SECRET=your-secure-jwt-secret

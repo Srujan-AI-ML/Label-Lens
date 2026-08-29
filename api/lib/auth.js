@@ -1,7 +1,7 @@
 // Auth utility functions
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smartbite-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'labellens-secret-key-change-in-production';
 
 export function generateToken(userId, username) {
     return jwt.sign(
