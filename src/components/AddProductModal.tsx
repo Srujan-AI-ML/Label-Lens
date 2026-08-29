@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from './CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
-import { analyseCompliance, buildScanResult, validateProductSpecifics } from '../services/complianceService';
+import { analyseCompliance, buildScanResult, validateProductSpecifics, calculateUnitSalePrice } from '../services/complianceService';
 import {
     X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine
 } from 'lucide-react';
@@ -48,6 +48,34 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleNetQuantityChange = (val: string) => {
+        setNetQuantity(val);
+        const calculated = calculateUnitSalePrice(mrp, val, quantityUnit);
+        if (calculated) {
+            setUnitPrice(calculated);
+        } else if (!val.trim()) {
+            setUnitPrice('');
+        }
+    };
+
+    const handleQuantityUnitChange = (val: string) => {
+        setQuantityUnit(val);
+        const calculated = calculateUnitSalePrice(mrp, netQuantity, val);
+        if (calculated) {
+            setUnitPrice(calculated);
+        }
+    };
+
+    const handleMrpChange = (val: string) => {
+        setMrp(val);
+        const calculated = calculateUnitSalePrice(val, netQuantity, quantityUnit);
+        if (calculated) {
+            setUnitPrice(calculated);
+        } else if (!val.trim()) {
+            setUnitPrice('');
+        }
+    };
 
     // Build synthesized label text from the specific fields
     const synthesizedText = useMemo(() => {
@@ -558,12 +586,12 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                             type="text"
                                             placeholder="e.g. 250"
                                             value={netQuantity}
-                                            onChange={(e) => setNetQuantity(e.target.value)}
+                                            onChange={(e) => handleNetQuantityChange(e.target.value)}
                                             className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         />
                                         <select
                                             value={quantityUnit}
-                                            onChange={(e) => setQuantityUnit(e.target.value)}
+                                            onChange={(e) => handleQuantityUnitChange(e.target.value)}
                                             className="w-20 px-2 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                         >
                                             <option value="g">g</option>
@@ -585,7 +613,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         type="text"
                                         placeholder="e.g. 30.00 (incl. of all taxes)"
                                         value={mrp}
-                                        onChange={(e) => setMrp(e.target.value)}
+                                        onChange={(e) => handleMrpChange(e.target.value)}
                                         className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                     />
                                 </div>

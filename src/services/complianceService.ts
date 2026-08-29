@@ -628,3 +628,70 @@ export function buildScanResult(
     imageData,
   };
 }
+
+/**
+ * Automatically calculate Unit Sale Price (USP) from MRP, Net Quantity, and Quantity Unit.
+ */
+export function calculateUnitSalePrice(
+  mrpStr: string,
+  qtyStr: string,
+  unitStr: string
+): string {
+  if (!mrpStr || !qtyStr || !unitStr) return '';
+
+  const cleanPrice = parseFloat(mrpStr.replace(/[^\d.]/g, ''));
+  const cleanQty = parseFloat(qtyStr.replace(/[^\d.]/g, ''));
+
+  if (isNaN(cleanPrice) || isNaN(cleanQty) || cleanPrice <= 0 || cleanQty <= 0) {
+    return '';
+  }
+
+  const unit = unitStr.trim().toLowerCase();
+  let baseQty = cleanQty;
+  let standardUnitName = 'gram';
+
+  if (unit === 'kg') {
+    baseQty = cleanQty * 1000;
+    standardUnitName = 'gram';
+  } else if (unit === 'g' || unit === 'gm' || unit === 'gram' || unit === 'grams') {
+    baseQty = cleanQty;
+    standardUnitName = 'gram';
+  } else if (unit === 'l' || unit === 'liter' || unit === 'litre' || unit === 'liters' || unit === 'litres') {
+    baseQty = cleanQty * 1000;
+    standardUnitName = 'ml';
+  } else if (unit === 'ml' || unit === 'milliliter' || unit === 'millilitre') {
+    baseQty = cleanQty;
+    standardUnitName = 'ml';
+  } else if (unit === 'pcs' || unit === 'pc' || unit === 'piece' || unit === 'pieces') {
+    baseQty = cleanQty;
+    standardUnitName = 'piece';
+  } else if (unit === 'units' || unit === 'unit') {
+    baseQty = cleanQty;
+    standardUnitName = 'unit';
+  } else {
+    baseQty = cleanQty;
+    standardUnitName = unit;
+  }
+
+  if (baseQty <= 0) return '';
+
+  const pricePerUnit = cleanPrice / baseQty;
+
+  let formattedNumber: string;
+  if (pricePerUnit >= 1) {
+    formattedNumber = pricePerUnit.toFixed(2);
+  } else if (pricePerUnit >= 0.01) {
+    const fixed3 = parseFloat(pricePerUnit.toFixed(3));
+    const fixed2 = parseFloat(pricePerUnit.toFixed(2));
+    if (fixed3 !== fixed2) {
+      formattedNumber = pricePerUnit.toFixed(3);
+    } else {
+      formattedNumber = pricePerUnit.toFixed(2);
+    }
+  } else {
+    formattedNumber = parseFloat(pricePerUnit.toFixed(4)).toString();
+  }
+
+  return `₹${formattedNumber} per ${standardUnitName}`;
+}
+
