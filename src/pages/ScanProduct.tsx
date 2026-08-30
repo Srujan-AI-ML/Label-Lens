@@ -1,12 +1,22 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from '../components/CameraModal';
-import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini, saveUserGeminiApiKey } from '../services/visionService';
+import { detectBarcode, lookupProduct, extractTextFromImage as _extractTextFromImage, scanProductImageWithGemini, saveUserGeminiApiKey } from '../services/visionService';
 import { analyseCompliance, buildScanResult, validateProductSpecifics, calculateUnitSalePrice } from '../services/complianceService';
+import {
+    ALL_CATEGORIES,
+    CATEGORY_REQUIREMENTS,
+    detectProductCategory,
+    normalizeCategory,
+    validateBarcodeGTIN,
+    validateFSSAI,
+    validateCategoryLicense,
+    type ProductCategory,
+} from '../services/categoryRequirements';
 import { 
     Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
     Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Save, RotateCcw,
-    ScanLine, X, Key
+    ScanLine, X, Key, CheckCircle, AlertCircle, HelpCircle
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 import type { PageType } from '../App';
@@ -85,14 +95,17 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     const [manufacturer, setManufacturer] = useState('');
     const [consumerCare, setConsumerCare] = useState('');
     const [fssaiLicense, setFssaiLicense] = useState('');
+    const [regulatoryLicense, setRegulatoryLicense] = useState('');
     const [countryOfOrigin, setCountryOfOrigin] = useState('India');
     const [unitPrice, setUnitPrice] = useState('');
-    const [category, setCategory] = useState('Food & Beverage');
+    const [category, setCategory] = useState<ProductCategory>('Food & Beverage');
     const [notes, setNotes] = useState('');
     const [rawText, setRawText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const currentCategorySpec = CATEGORY_REQUIREMENTS[category] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
 
     const handleNetQuantityChange = (val: string) => {
         setNetQuantity(val);
@@ -122,6 +135,34 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         }
     };
 
+    const handleCategoryChange = (newCat: ProductCategory) => {
+        setCategory(newCat);
+        // If switching to Food & Beverage, sync fssaiLicense and regulatoryLicense
+        if (newCat === 'Food & Beverage') {
+            if (!fssaiLicense && regulatoryLicense) {
+                setFssaiLicense(regulatoryLicense);
+            }
+        } else {
+            if (!regulatoryLicense && fssaiLicense) {
+                setRegulatoryLicense(fssaiLicense);
+            }
+        }
+    };
+
+    // Live validation states
+    const barcodeValidation = useMemo(() => {
+        return validateBarcodeGTIN(barcode);
+    }, [barcode]);
+
+    const activeRegulatoryValue = category === 'Food & Beverage' ? fssaiLicense : regulatoryLicense;
+
+    const regulatoryValidation = useMemo(() => {
+        if (category === 'Food & Beverage') {
+            return validateFSSAI(fssaiLicense);
+        }
+        return validateCategoryLicense(category, regulatoryLicense);
+    }, [category, fssaiLicense, regulatoryLicense]);
+
     // Build synthesized label text from the specific fields
     const synthesizedText = useMemo(() => {
         const parts: string[] = [];
@@ -132,28 +173,35 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         if (mfgDate) parts.push(`Mfg Date: ${mfgDate}`);
         if (expiryDate) parts.push(`Best Before: ${expiryDate}`);
         if (consumerCare) parts.push(`Consumer Care: ${consumerCare}`);
-        if (fssaiLicense) parts.push(`FSSAI Lic No: ${fssaiLicense}`);
+        if (fssaiLicense && category === 'Food & Beverage') parts.push(`FSSAI Lic No: ${fssaiLicense}`);
+        if (regulatoryLicense && category !== 'Food & Beverage') parts.push(`${currentCategorySpec.regulatoryField.label}: ${regulatoryLicense}`);
         if (countryOfOrigin) parts.push(`Country of Origin: ${countryOfOrigin}`);
         if (unitPrice) parts.push(`Unit Sale Price: ${unitPrice}`);
         return parts.join('\n');
-    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
+    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category, currentCategorySpec]);
 
     // Live analysis on current synthesized text & form state
     const liveAnalysis = useMemo(() => {
-        return analyseCompliance(rawText || synthesizedText, {
-            productName,
-            manufacturer,
-            netQuantity,
-            quantityUnit,
-            mrp,
-            manufactureDate: mfgDate,
-            expiryDate,
-            consumerCare,
-            fssaiLicense,
-            countryOfOrigin,
-            unitPrice
-        });
-    }, [rawText, synthesizedText, productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
+        return analyseCompliance(
+            rawText || synthesizedText,
+            {
+                productName,
+                manufacturer,
+                netQuantity,
+                quantityUnit,
+                mrp,
+                manufactureDate: mfgDate,
+                expiryDate,
+                consumerCare,
+                fssaiLicense: category === 'Food & Beverage' ? fssaiLicense : '',
+                regulatoryLicense: category !== 'Food & Beverage' ? regulatoryLicense : '',
+                countryOfOrigin,
+                unitPrice,
+                category
+            },
+            category
+        );
+    }, [rawText, synthesizedText, productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category]);
 
     const handleCameraCapture = async (imageSrc: string) => {
         setShowCamera(false);
@@ -176,7 +224,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     };
 
     const autoPopulateFromText = (extractedText: string, currentName: string = '', currentBarcode: string = '') => {
-        const analysis = analyseCompliance(extractedText, currentName);
+        const analysis = analyseCompliance(extractedText, currentName, category);
         const decs = analysis.declarations;
 
         if (decs.genericName?.present && decs.genericName.value) {
@@ -259,6 +307,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setManufacturer('');
         setConsumerCare('');
         setFssaiLicense('');
+        setRegulatoryLicense('');
         setCountryOfOrigin('India');
         setUnitPrice('');
         setNotes('');
@@ -289,7 +338,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 console.warn('Barcode lookup notice:', barcodeErr);
             }
 
-            // Step 2: Google Gemini AI Multimodal Vision Analysis
+            // Step 2: Google Gemini AI Multimodal Vision Analysis (Preserved exactly)
             setScanStatus('Running Google Gemini AI Multimodal Vision Analysis...');
             const scanResult = await scanProductImageWithGemini(imageSrc);
             const { text, product } = scanResult;
@@ -298,7 +347,16 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 setRawText(text);
             }
 
-            // Step 3: Populate designated form fields from structured Gemini output
+            // Step 3: Intelligent Category Detection based on extracted text & product identity
+            const catDetection = detectProductCategory(
+                text || '',
+                product?.productName || detectedName || '',
+                product?.brand || ''
+            );
+            setCategory(catDetection.category);
+            console.log(`[Category Engine] Detected category: ${catDetection.category} (${catDetection.reason})`);
+
+            // Step 4: Populate designated form fields from structured Gemini output
             if (product) {
                 if (product.productName) {
                     setProductName(product.productName);
@@ -340,7 +398,9 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 }
                 if (product.fssaiLicense) {
                     const fMatch = String(product.fssaiLicense).match(/\d{14}/);
-                    setFssaiLicense(fMatch ? fMatch[0] : String(product.fssaiLicense));
+                    const licVal = fMatch ? fMatch[0] : String(product.fssaiLicense);
+                    setFssaiLicense(licVal);
+                    setRegulatoryLicense(licVal);
                 }
                 if (product.countryOfOrigin) {
                     setCountryOfOrigin(product.countryOfOrigin);
@@ -355,12 +415,12 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 }
             }
 
-            // Step 4: Run auto-populate fallback on raw text to capture any unfilled fields
+            // Step 5: Run auto-populate fallback on raw text to capture any unfilled fields
             if (text && text.trim()) {
                 autoPopulateFromText(text, detectedName, detectedBarcode);
             }
 
-            setScanStatus('✅ Packaging declarations extracted successfully! Review and edit fields below.');
+            setScanStatus(`✅ Scanned & classified as [${catDetection.category}]. Review and edit fields below.`);
             console.log('--- [PIPELINE] FORM STATE UPDATED ---');
             console.log('--- [PIPELINE] SCAN COMPLETE ---');
 
@@ -383,7 +443,9 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             mrp,
             mfgDate,
             expiryDate,
-            fssaiLicense
+            fssaiLicense,
+            regulatoryLicense,
+            category
         });
 
         if (!validation.isValid) {
@@ -405,12 +467,15 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     expiryDate: expiryDate.trim(),
                     manufacturer: manufacturer.trim(),
                     consumerCare: consumerCare.trim(),
-                    fssaiLicense: fssaiLicense.trim(),
+                    fssaiLicense: category === 'Food & Beverage' ? fssaiLicense.trim() : undefined,
+                    regulatoryLicense: category !== 'Food & Beverage' ? regulatoryLicense.trim() : undefined,
                     countryOfOrigin: countryOfOrigin.trim(),
-                    unitPrice: unitPrice.trim()
+                    unitPrice: unitPrice.trim(),
+                    category
                 },
                 barcode.trim() || undefined,
-                imagePreview || undefined
+                imagePreview || undefined,
+                category
             );
             scanData.category = category;
             scanData.notes = notes;
@@ -439,32 +504,49 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setManufacturer('');
         setConsumerCare('');
         setFssaiLicense('');
+        setRegulatoryLicense('');
         setCountryOfOrigin('India');
         setUnitPrice('');
+        setCategory('Food & Beverage');
         setNotes('');
         setRawText('');
         setImagePreview(null);
         setScanStatus('');
     };
 
-    const declarationIcons: Array<{
-        key: keyof ComplianceDeclarations;
-        title: string;
-        icon: any;
-        color: string;
-        emoji: string;
-    }> = [
-        { key: 'genericName', title: '1. Product Identity / Name', icon: Tag, color: 'text-blue-500', emoji: '🏷️' },
-        { key: 'netQuantity', title: '2. Net Quantity', icon: Scale, color: 'text-emerald-500', emoji: '⚖️' },
-        { key: 'mrp', title: '3. Maximum Retail Price (MRP)', icon: DollarSign, color: 'text-amber-500', emoji: '💰' },
-        { key: 'manufactureDate', title: '4. Date of Mfg / Packing', icon: Calendar, color: 'text-violet-500', emoji: '📅' },
-        { key: 'bestBefore', title: '5. Best Before / Expiry', icon: Clock, color: 'text-rose-500', emoji: '⌛' },
-        { key: 'manufacturer', title: '6. Manufacturer & Address', icon: Factory, color: 'text-blue-500', emoji: '🏭' },
-        { key: 'consumerCare', title: '7. Consumer Care Helpline', icon: Phone, color: 'text-teal-500', emoji: '📞' },
-        { key: 'fssaiLicense', title: '8. FSSAI License No.', icon: Shield, color: 'text-orange-500', emoji: '🛡️' },
-        { key: 'countryOfOrigin', title: '9. Country of Origin', icon: Globe, color: 'text-cyan-500', emoji: '🌐' },
-        { key: 'retailSalePrice', title: '10. Unit Retail Price', icon: Layers, color: 'text-purple-500', emoji: '💵' },
-    ];
+    // Declarations checklist icons tailored to category
+    const dynamicChecklistItems = useMemo(() => {
+        return currentCategorySpec.mandatoryDeclarations.map(decl => {
+            let icon = Tag;
+            let emoji = '🏷️';
+
+            if (decl.key === 'genericName') { icon = Tag; emoji = '🏷️'; }
+            else if (decl.key === 'netQuantity') { icon = Scale; emoji = '⚖️'; }
+            else if (decl.key === 'mrp') { icon = DollarSign; emoji = '💰'; }
+            else if (decl.key === 'manufactureDate') { icon = Calendar; emoji = '📅'; }
+            else if (decl.key === 'bestBefore') { icon = Clock; emoji = '⌛'; }
+            else if (decl.key === 'manufacturer') { icon = Factory; emoji = '🏭'; }
+            else if (decl.key === 'consumerCare') { icon = Phone; emoji = '📞'; }
+            else if (decl.key === 'fssaiLicense' || decl.key.includes('License') || decl.key.includes('Registration')) { icon = Shield; emoji = '🛡️'; }
+            else if (decl.key === 'countryOfOrigin') { icon = Globe; emoji = '🌐'; }
+            else if (decl.key === 'retailSalePrice') { icon = Layers; emoji = '💵'; }
+
+            const declObj = liveAnalysis.declarations[decl.key] || (decl.key === currentCategorySpec.regulatoryField.key ? liveAnalysis.declarations.regulatoryLicense : undefined);
+            const isNotApp = decl.requirement === 'NOT_APPLICABLE';
+            const isPass = declObj?.present && declObj?.status !== 'FAIL';
+
+            return {
+                key: decl.key,
+                title: decl.label,
+                requirement: decl.requirement,
+                icon,
+                emoji,
+                isNotApp,
+                isPass,
+                value: declObj?.value || null,
+            };
+        });
+    }, [currentCategorySpec, liveAnalysis]);
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -498,7 +580,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     Packaging Inspection & Compliance Analysis
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-                    Enter product specifics in the grid below or upload/scan packaging to check declarations compliance under the Label Lens verifier.
+                    Enter product specifics in the grid below or upload/scan packaging to check category-aware declarations compliance under Legal Metrology Rules.
                 </p>
             </div>
 
@@ -508,7 +590,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 {/* Left Column (2/3 width): Specifics Grid Form or Image Upload */}
                 <div className="lg:col-span-2 space-y-6">
 
-                    {/* Image / Camera Upload Bar (if in scan mode or wanting to attach photo) */}
+                    {/* Image / Camera Upload Bar */}
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
@@ -516,7 +598,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                     <span>📸</span> Attach Packaging Photo / Camera Scan
                                 </h2>
                                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                                    Upload or snap label photo for automatic character extraction
+                                    Upload or snap label photo for automatic character extraction and category detection
                                 </p>
                             </div>
                             {imagePreview && (
@@ -593,20 +675,40 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         )}
                     </div>
 
-                    {/* Specifics Grid Form with Icons / Emojis */}
+                    {/* Specifics Grid Form */}
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+                        <div className="flex flex-wrap items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700 gap-2">
                             <div>
                                 <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>📋</span> Mandatory Declarations Specifics Grid
+                                    <span>📋</span> Category-Aware Declarations Grid
                                 </h2>
                                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                                    Enter or verify each declaration item to calculate compliance
+                                    Dynamic regulatory requirements customized for: <span className="font-bold text-blue-600 dark:text-blue-400">{category}</span>
                                 </p>
                             </div>
                             <span className="text-xs font-bold px-3 py-1 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-full">
-                                {Object.values(liveAnalysis.declarations).filter(d => d.present).length} / 10 Met
+                                {dynamicChecklistItems.filter(d => d.isPass).length} / {dynamicChecklistItems.filter(d => !d.isNotApp).length} Applicable Met
                             </span>
+                        </div>
+
+                        {/* Category Selector Bar */}
+                        <div className="p-3.5 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-900/40">
+                            <label className="block text-xs font-bold text-blue-900 dark:text-blue-200 mb-1.5 flex items-center justify-between">
+                                <span>📦 Product Category (Determines Applicable Regulatory Rules)</span>
+                                <span className="text-[10px] font-normal text-blue-700 dark:text-blue-300">Auto-detected / Selectable</span>
+                            </label>
+                            <select
+                                value={category}
+                                onChange={(e) => handleCategoryChange(e.target.value as ProductCategory)}
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                            >
+                                {ALL_CATEGORIES.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 italic">
+                                {currentCategorySpec.description}
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -666,18 +768,34 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 />
                             </div>
 
-                            {/* 4. Barcode / UPC */}
+                            {/* 4. Barcode / GTIN with Real-time Check-Digit Validation Badge */}
                             <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                    <span>🔍</span> Barcode / GTIN Number
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <span>🔍</span> Barcode / GTIN Number
+                                    </label>
+                                    {barcode && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                            barcodeValidation.isValid
+                                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                                : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                                        }`}>
+                                            {barcodeValidation.isValid ? '✓ Check Digit Verified' : '✗ Checksum Mismatch'}
+                                        </span>
+                                    )}
+                                </div>
                                 <input
                                     type="text"
-                                    placeholder="e.g. 8901058005080"
+                                    placeholder="e.g. 8901058005080 (GTIN-13)"
                                     value={barcode}
                                     onChange={(e) => setBarcode(e.target.value)}
                                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
+                                {barcode && (
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 truncate" title={barcodeValidation.message}>
+                                        {barcodeValidation.message}
+                                    </p>
+                                )}
                             </div>
 
                             {/* 5. Mfg Date */}
@@ -693,11 +811,18 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 />
                             </div>
 
-                            {/* 6. Expiry / Best Before */}
+                            {/* 6. Expiry / Best Before (Shows relevance for category) */}
                             <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                    <span>⌛</span> Best Before / Expiry Date
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <span>⌛</span> Best Before / Expiry Date
+                                    </label>
+                                    <span className="text-[10px] text-gray-400">
+                                        {category === 'Electrical / Electronic Products' || category === 'Toys' || category === 'Textiles / Garments'
+                                            ? '(Optional / Non-perishable)'
+                                            : '(Mandatory)'}
+                                    </span>
+                                </div>
                                 <input
                                     type="date"
                                     value={expiryDate}
@@ -734,18 +859,48 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 />
                             </div>
 
-                            {/* 9. FSSAI License Number */}
+                            {/* 9. Dynamic Category-Specific Regulatory Field */}
                             <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                    <span>🛡️</span> FSSAI License No. (14 digits)
-                                </label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. 10012022000046"
-                                    value={fssaiLicense}
-                                    onChange={(e) => setFssaiLicense(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
-                                />
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <span>🛡️</span> {currentCategorySpec.regulatoryField.label}
+                                    </label>
+                                    {activeRegulatoryValue && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                            regulatoryValidation.isValid
+                                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                                : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                                        }`}>
+                                            {regulatoryValidation.statusText}
+                                        </span>
+                                    )}
+                                </div>
+                                {category === 'Food & Beverage' ? (
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 10012022000046 (14 digits)"
+                                        value={fssaiLicense}
+                                        onChange={(e) => {
+                                            setFssaiLicense(e.target.value);
+                                            setRegulatoryLicense(e.target.value);
+                                        }}
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        placeholder={currentCategorySpec.regulatoryField.placeholder}
+                                        value={regulatoryLicense}
+                                        onChange={(e) => {
+                                            setRegulatoryLicense(e.target.value);
+                                            setFssaiLicense(e.target.value);
+                                        }}
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                    />
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                    {regulatoryValidation.message || currentCategorySpec.regulatoryField.helpText}
+                                </p>
                             </div>
 
                             {/* 10. Country of Origin */}
@@ -776,38 +931,18 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 />
                             </div>
 
-                            {/* 12. Category & Notes (Full width) */}
-                            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                        📦 Commodity Category
-                                    </label>
-                                    <select
-                                        value={category}
-                                        onChange={(e) => setCategory(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                    >
-                                        <option value="Food & Beverage">Food & Beverage</option>
-                                        <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
-                                        <option value="Pharmaceutical / Health">Pharmaceutical / Health</option>
-                                        <option value="Household & Cleaning">Household & Cleaning</option>
-                                        <option value="Electronics & Electricals">Electronics & Electricals</option>
-                                        <option value="Other Packaged Goods">Other Packaged Goods</option>
-                                    </select>
-                                </div>
-
-                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                        📝 Inspector Field Notes
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Retail store inspection at Sector 4..."
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                    />
-                                </div>
+                            {/* 12. Inspector Field Notes (Full width) */}
+                            <div className="sm:col-span-2 p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    📝 Inspector Field Notes
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Retail store inspection at Sector 4..."
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                />
                             </div>
                         </div>
 
@@ -854,7 +989,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                                 type="button"
                                 onClick={() => handleSaveAndSubmit('report')}
                                 disabled={isScanning}
-                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-850 hover:from-blue-500 hover:to-blue-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
                             >
                                 <Sparkles size={16} />
                                 Save & View Certificate
@@ -863,60 +998,67 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                     </div>
                 </div>
 
-                {/* Right Column (1/3 width): Side Box Rules of 2011 Checklist */}
+                {/* Right Column (1/3 width): Side Box Category-Aware Checklist */}
                 <div className="lg:col-span-1">
                     <div className="sticky top-20 bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
                         <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
                             <div>
-                                <h3 className="text-base font-bold text-gray-900 dark:text-white">Rules, 2011 Checklist</h3>
-                                <p className="text-[11px] text-gray-400 dark:text-gray-500">Label Lens Verification Status</p>
+                                <h3 className="text-base font-bold text-gray-900 dark:text-white">Compliance Checklist</h3>
+                                <p className="text-[11px] text-gray-400 dark:text-gray-500">{category}</p>
                             </div>
                             <div className="text-right">
-                                <span className="text-xl font-black text-blue-600 dark:text-blue-400">
+                                <span className={`text-xl font-black ${
+                                    liveAnalysis.complianceScore === 100
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : liveAnalysis.complianceScore > 50
+                                        ? 'text-amber-500'
+                                        : 'text-rose-600'
+                                }`}>
                                     {liveAnalysis.complianceScore}%
                                 </span>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase">{liveAnalysis.complianceStatus}</p>
                             </div>
                         </div>
 
-                        {/* Rules checkboxes with ticks/crosses */}
-                        <div className="space-y-2.5">
-                            {declarationIcons.map(({ key, title, emoji }) => {
-                                const isCompliant = liveAnalysis.declarations[key]?.present;
+                        {/* Rules checkboxes with ticks/crosses/NA */}
+                        <div className="space-y-2">
+                            {dynamicChecklistItems.map((item) => {
                                 return (
                                     <div
-                                        key={key}
+                                        key={item.key}
                                         className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
-                                            isCompliant
+                                            item.isNotApp
+                                                ? 'bg-gray-50/70 dark:bg-gray-800/40 border-gray-200/50 dark:border-gray-700/50 opacity-75'
+                                                : item.isPass
                                                 ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
                                                 : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/30'
                                         }`}
                                     >
                                         <div className="flex items-center gap-2 min-w-0 pr-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={isCompliant}
-                                                readOnly
-                                                className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-default"
-                                            />
+                                            <span className="text-sm">{item.emoji}</span>
                                             <span className="font-semibold text-gray-800 dark:text-gray-200 truncate text-[11px]">
-                                                {emoji} {title}
+                                                {item.title}
                                             </span>
                                         </div>
 
                                         <div className="shrink-0">
-                                            {isCompliant ? (
+                                            {item.isNotApp ? (
+                                                <span className="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500 font-bold text-[10px]">
+                                                    — N/A
+                                                </span>
+                                            ) : item.isPass ? (
                                                 <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">
-                                                    ✔️ Pass
+                                                    <CheckCircle size={12} /> Pass
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold text-[10px]">
-                                                    ❌ Fail
+                                                    <AlertCircle size={12} /> Fail
                                                 </span>
                                             )}
                                         </div>
                                     </div>
                                 );
-                             })}
+                            })}
                         </div>
                     </div>
                 </div>

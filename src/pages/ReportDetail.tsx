@@ -1,10 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ScannedProduct } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown, Save, X } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown, Save, X, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { analyseCompliance, calculateUnitSalePrice } from '../services/complianceService';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import {
+    ALL_CATEGORIES,
+    CATEGORY_REQUIREMENTS,
+    normalizeCategory,
+    validateBarcodeGTIN,
+    validateFSSAI,
+    validateCategoryLicense,
+    type ProductCategory,
+} from '../services/categoryRequirements';
+import {
+    buildUnifiedReportData,
+    exportComplianceReportPDF,
+    exportComplianceReportDOCX,
+} from '../services/reportService';
 
 interface ReportDetailProps {
     product: ScannedProduct;
@@ -35,15 +47,30 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
     const [editManufacturer, setEditManufacturer] = useState('');
     const [editConsumerCare, setEditConsumerCare] = useState('');
     const [editFssaiLicense, setEditFssaiLicense] = useState('');
+    const [editRegulatoryLicense, setEditRegulatoryLicense] = useState('');
     const [editCountryOfOrigin, setEditCountryOfOrigin] = useState('India');
     const [editUnitPrice, setEditUnitPrice] = useState('');
-    const [editCategory, setEditCategory] = useState('Food & Beverage');
+    const [editCategory, setEditCategory] = useState<ProductCategory>('Food & Beverage');
     const [editNotes, setEditNotes] = useState('');
+
+    const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
 
     useEffect(() => {
         setCurrentProduct(product);
         setNotes(product.notes || '');
     }, [product]);
+
+    const resolvedCategory = useMemo(() => {
+        return normalizeCategory(currentProduct.category);
+    }, [currentProduct.category]);
+
+    const unifiedReport = useMemo(() => {
+        return buildUnifiedReportData(currentProduct);
+    }, [currentProduct]);
+
+    const editCategorySpec = useMemo(() => {
+        return CATEGORY_REQUIREMENTS[editCategory] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
+    }, [editCategory]);
 
     const openEditModal = () => {
         const p = currentProduct;
@@ -68,10 +95,14 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         setEditExpiryDate(p.declarations?.bestBefore?.value || '');
         setEditManufacturer(p.declarations?.manufacturer?.value || '');
         setEditConsumerCare(p.declarations?.consumerCare?.value || '');
-        setEditFssaiLicense(p.declarations?.fssaiLicense?.value || '');
+        
+        const licVal = p.declarations?.fssaiLicense?.value || p.regulatoryLicense || '';
+        setEditFssaiLicense(licVal);
+        setEditRegulatoryLicense(licVal);
+        
         setEditCountryOfOrigin(p.declarations?.countryOfOrigin?.value || 'India');
         setEditUnitPrice(p.declarations?.retailSalePrice?.value || '');
-        setEditCategory(p.category || 'Food & Beverage');
+        setEditCategory(normalizeCategory(p.category));
         setEditNotes(p.notes || '');
 
         setIsEditingProduct(true);
@@ -105,6 +136,19 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         }
     };
 
+    const handleEditCategoryChange = (newCat: ProductCategory) => {
+        setEditCategory(newCat);
+        if (newCat === 'Food & Beverage') {
+            if (!editFssaiLicense && editRegulatoryLicense) {
+                setEditFssaiLicense(editRegulatoryLicense);
+            }
+        } else {
+            if (!editRegulatoryLicense && editFssaiLicense) {
+                setEditRegulatoryLicense(editFssaiLicense);
+            }
+        }
+    };
+
     const handleSaveProductEdit = async () => {
         setIsSavingProduct(true);
         try {
@@ -116,7 +160,8 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 editMfgDate ? `Mfg Date: ${editMfgDate.trim()}` : '',
                 editExpiryDate ? `Best Before: ${editExpiryDate.trim()}` : '',
                 editConsumerCare ? `Consumer Care: ${editConsumerCare.trim()}` : '',
-                editFssaiLicense ? `FSSAI Lic No: ${editFssaiLicense.trim()}` : '',
+                editCategory === 'Food & Beverage' && editFssaiLicense ? `FSSAI Lic No: ${editFssaiLicense.trim()}` : '',
+                editCategory !== 'Food & Beverage' && editRegulatoryLicense ? `${editCategorySpec.regulatoryField.label}: ${editRegulatoryLicense.trim()}` : '',
                 editCountryOfOrigin ? `Country of Origin: ${editCountryOfOrigin.trim()}` : '',
                 editUnitPrice ? `Unit Sale Price: ${editUnitPrice.trim()}` : ''
             ].filter(Boolean).join('\n');
@@ -132,10 +177,13 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     expiryDate: editExpiryDate.trim(),
                     manufacturer: editManufacturer.trim(),
                     consumerCare: editConsumerCare.trim(),
-                    fssaiLicense: editFssaiLicense.trim(),
+                    fssaiLicense: editCategory === 'Food & Beverage' ? editFssaiLicense.trim() : undefined,
+                    regulatoryLicense: editCategory !== 'Food & Beverage' ? editRegulatoryLicense.trim() : undefined,
                     countryOfOrigin: editCountryOfOrigin.trim(),
-                    unitPrice: editUnitPrice.trim()
-                }
+                    unitPrice: editUnitPrice.trim(),
+                    category: editCategory
+                },
+                editCategory
             );
 
             const mrpToSave = editMrp.trim()
@@ -146,8 +194,9 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 productName: editProductName.trim() || 'Inspected Commodity',
                 barcode: editBarcode.trim() || undefined,
                 mrp: mrpToSave,
-                category: editCategory || undefined,
+                category: editCategory,
                 notes: editNotes.trim() || undefined,
+                regulatoryLicense: editCategory === 'Food & Beverage' ? editFssaiLicense.trim() : editRegulatoryLicense.trim(),
                 declarations,
                 violations,
                 complianceScore,
@@ -195,152 +244,28 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
 
     const handleDownloadPDF = () => {
         try {
-            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-            doc.setFillColor(29, 78, 216);
-            doc.rect(0, 0, 210, 40, 'F');
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(22);
-            doc.setTextColor(255, 255, 255);
-            doc.text('LABEL LENS', 15, 18);
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(219, 234, 254);
-            doc.text('COMPLIANCE INSPECTION CERTIFICATE', 15, 25);
-            doc.text(`Certificate ID: ${currentProduct.id}`, 15, 30);
-            doc.setFillColor(255, 255, 255);
-            doc.roundedRect(160, 8, 35, 24, 3, 3, 'F');
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8);
-            doc.setTextColor(75, 85, 99);
-            doc.text('SCORE', 177, 14, { align: 'center' });
-            doc.setFontSize(16);
-            doc.setTextColor(29, 78, 216);
-            doc.text(`${currentProduct.complianceScore}%`, 177, 21, { align: 'center' });
-            doc.setFontSize(7);
-            doc.setTextColor(107, 114, 128);
-            doc.text(currentProduct.complianceStatus.toUpperCase(), 177, 26, { align: 'center' });
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.setTextColor(31, 41, 55);
-            doc.text('Product Information', 15, 52);
-            doc.setLineWidth(0.5);
-            doc.setDrawColor(229, 231, 235);
-            doc.line(15, 54, 195, 54);
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Product Name:', 15, 62);
-            doc.setFont('helvetica', 'normal');
-            doc.text(currentProduct.productName, 45, 62);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Barcode GTIN:', 15, 68);
-            doc.setFont('helvetica', 'normal');
-            doc.text(currentProduct.barcode || 'N/A', 45, 68);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Category:', 15, 74);
-            doc.setFont('helvetica', 'normal');
-            doc.text(currentProduct.category || 'Food & Beverage', 45, 74);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Scan Date:', 15, 80);
-            doc.setFont('helvetica', 'normal');
-            doc.text(new Date(currentProduct.scannedAt).toLocaleString(), 45, 80);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.setTextColor(31, 41, 55);
-            doc.text('Mandatory Declarations Audit (Rules, 2011)', 15, 92);
-            const tableRows = [
-                ['Generic / Product Name', currentProduct.declarations.genericName.present ? 'PASS' : 'FAIL', currentProduct.declarations.genericName.value || 'Missing', 'Mandatory'],
-                ['Net Quantity', currentProduct.declarations.netQuantity.present ? 'PASS' : 'FAIL', currentProduct.declarations.netQuantity.value || 'Missing', 'Mandatory'],
-                ['Maximum Retail Price (MRP)', currentProduct.declarations.mrp.present ? 'PASS' : 'FAIL', currentProduct.declarations.mrp.value || currentProduct.mrp || 'Missing', 'Mandatory'],
-                ['Date of Manufacture / Packing', currentProduct.declarations.manufactureDate.present ? 'PASS' : 'FAIL', currentProduct.declarations.manufactureDate.value || 'Missing', 'Mandatory'],
-                ['Best Before / Expiry Date', currentProduct.declarations.bestBefore.present ? 'PASS' : 'FAIL', currentProduct.declarations.bestBefore.value || 'Missing', 'Mandatory'],
-                ['Manufacturer & Address', currentProduct.declarations.manufacturer.present ? 'PASS' : 'FAIL', currentProduct.declarations.manufacturer.value || 'Missing', 'Mandatory'],
-                ['Consumer Care Helpline', currentProduct.declarations.consumerCare.present ? 'PASS' : 'FAIL', currentProduct.declarations.consumerCare.value || 'Missing', 'Mandatory'],
-                ['FSSAI License Number', currentProduct.declarations.fssaiLicense.present ? 'PASS' : 'FAIL', currentProduct.declarations.fssaiLicense.value || 'Missing', 'Required for Food'],
-                ['Country of Origin', currentProduct.declarations.countryOfOrigin.present ? 'PASS' : 'FAIL', currentProduct.declarations.countryOfOrigin.value || 'Missing', 'Mandatory if Imported'],
-                ['Unit Sale Price (USP)', currentProduct.declarations.retailSalePrice.present ? 'PASS' : 'FAIL', currentProduct.declarations.retailSalePrice.value || 'Missing', 'Recommended']
-            ];
-            autoTable(doc, {
-                startY: 96,
-                head: [['Declaration Field', 'Status', 'Extracted / Entered Value', 'Requirement']],
-                body: tableRows,
-                theme: 'striped',
-                headStyles: { fillColor: [29, 78, 216], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
-                bodyStyles: { fontSize: 8, textColor: [55, 65, 81] },
-                columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold' }, 1: { cellWidth: 20 }, 2: { cellWidth: 80 }, 3: { cellWidth: 35 } },
-                didParseCell: (data) => {
-                    if (data.column.index === 1) {
-                        if (data.cell.raw === 'PASS') {
-                            data.cell.styles.textColor = [16, 185, 129];
-                            data.cell.styles.fontStyle = 'bold';
-                        } else {
-                            data.cell.styles.textColor = [239, 68, 68];
-                            data.cell.styles.fontStyle = 'bold';
-                        }
-                    }
-                }
-            });
-            let finalY = (doc as any).lastAutoTable.finalY + 10;
-            if (currentProduct.violations && currentProduct.violations.length > 0) {
-                if (finalY > 230) { doc.addPage(); finalY = 20; }
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(11);
-                doc.setTextColor(185, 28, 28);
-                doc.text(`Rule Violations Detected (${currentProduct.violations.length})`, 15, finalY);
-                const violationRows = currentProduct.violations.map((v, i) => [ `${i + 1}`, v.severity.toUpperCase(), v.label, v.message ]);
-                autoTable(doc, {
-                    startY: finalY + 4,
-                    head: [['#', 'Severity', 'Rule Area', 'Deficiency Details']],
-                    body: violationRows,
-                    theme: 'plain',
-                    headStyles: { fillColor: [254, 226, 226], textColor: [153, 27, 27], fontStyle: 'bold', fontSize: 8 },
-                    bodyStyles: { fontSize: 7.5, textColor: [127, 29, 29] },
-                    columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 25, fontStyle: 'bold' }, 2: { cellWidth: 50, fontStyle: 'bold' }, 3: { cellWidth: 100 } }
-                });
-                finalY = (doc as any).lastAutoTable.finalY + 10;
-            }
-            if (currentProduct.notes) {
-                if (finalY > 240) { doc.addPage(); finalY = 20; }
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(10);
-                doc.setTextColor(31, 41, 55);
-                doc.text('Inspector Field Notes:', 15, finalY);
-                doc.setFont('helvetica', 'italic');
-                doc.setFontSize(8.5);
-                doc.setTextColor(75, 85, 99);
-                doc.text(currentProduct.notes, 15, finalY + 5, { maxWidth: 180 });
-            }
-            const pageCount = (doc as any).internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(7.5);
-                doc.setTextColor(156, 163, 175);
-                doc.text('Generated by Label Lens Verification System', 15, 290);
-                doc.text(`Page ${i} of ${pageCount}`, 195, 290, { align: 'right' });
-            }
-            const safeName = currentProduct.productName.replace(/[^a-zA-Z0-9]/g, '_');
-            doc.save(`Label_Lens_${safeName}_Certificate.pdf`);
+            exportComplianceReportPDF(currentProduct);
         } catch (err: any) {
             console.error('Failed to generate PDF:', err);
             alert('Failed to generate PDF: ' + err.message);
         }
     };
 
-    const declarationLabels: Record<keyof typeof currentProduct.declarations, { label: string; desc: string; mandatory: boolean }> = {
-        genericName: { label: 'Generic / Common Name', desc: 'Generic description of product', mandatory: true },
-        netQuantity: { label: 'Net Quantity', desc: 'Standard weight, volume, or count declaration', mandatory: true },
-        mrp: { label: 'Maximum Retail Price (MRP)', desc: 'Consumer price inclusive of all taxes', mandatory: true },
-        manufactureDate: { label: 'Month & Year of Manufacture / Packing', desc: 'Date indicating when product was packed', mandatory: true },
-        bestBefore: { label: 'Best Before / Expiry Date', desc: 'Date of expiration/perishability', mandatory: false },
-        manufacturer: { label: 'Manufacturer / Packer Name & Address', desc: 'Complete identity & location details', mandatory: true },
-        consumerCare: { label: 'Consumer Care Contact Details', desc: 'Phone, email, and address for complaints', mandatory: true },
-        fssaiLicense: { label: 'FSSAI License Number', desc: '14-digit food safety registration', mandatory: false },
-        countryOfOrigin: { label: 'Country of Origin', desc: 'Place of manufacture (mandatory for imports)', mandatory: false },
-        retailSalePrice: { label: 'Retail Sale Price per Unit', desc: 'Unit price representation (Price per gram/ml)', mandatory: false },
+    const handleDownloadDOCX = async () => {
+        setIsGeneratingDocx(true);
+        try {
+            await exportComplianceReportDOCX(currentProduct);
+        } catch (err: any) {
+            console.error('Failed to generate DOCX report:', err);
+            alert('Failed to generate DOCX report: ' + err.message);
+        } finally {
+            setIsGeneratingDocx(false);
+        }
     };
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 printable-report">
+            {/* Top Navigation Bar with Actions */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 no-print">
                 <button
                     onClick={onBack}
@@ -350,31 +275,42 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     Return to Dashboard
                 </button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <button
                         onClick={openEditModal}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
                     >
                         <Edit2 size={16} />
                         Edit Product
                     </button>
                     <button
                         onClick={handlePrint}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm shadow-sm transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
                     >
                         <Printer size={16} />
                         Print Certificate
                     </button>
                     <button
                         onClick={handleDownloadPDF}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-855 hover:from-blue-500 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+                        title="Download standard non-editable PDF certificate"
                     >
                         <FileDown size={16} />
                         Download PDF Certificate
                     </button>
+                    <button
+                        onClick={handleDownloadDOCX}
+                        disabled={isGeneratingDocx}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+                        title="Download real editable Microsoft Word .docx report"
+                    >
+                        <FileText size={16} />
+                        {isGeneratingDocx ? 'Generating Word Doc...' : 'Download Editable Report (.DOCX)'}
+                    </button>
                 </div>
             </div>
 
+            {/* Certificate Header Banner */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700/50 shadow-lg">
                 <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(currentProduct.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
                     <div>
@@ -396,11 +332,15 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 </div>
 
                 <div className="p-8">
+                    {/* Metadata Summary Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 pb-8 border-b border-gray-100 dark:border-gray-700/50">
                         <div>
                             <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Product Barcode</span>
                             <span className="font-mono font-bold text-gray-900 dark:text-white mt-1 block">
                                 {currentProduct.barcode || 'Not Detected'}
+                            </span>
+                            <span className="text-[10px] text-gray-400 block mt-0.5">
+                                {unifiedReport.barcodeValidationText}
                             </span>
                         </div>
                         <div>
@@ -410,20 +350,21 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             </span>
                         </div>
                         <div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Category</span>
-                            <span className="font-bold text-gray-900 dark:text-white mt-1 block">
-                                {currentProduct.category || 'Packaged Commodity'}
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Product Category</span>
+                            <span className="font-bold text-blue-600 dark:text-blue-400 mt-1 block">
+                                {resolvedCategory}
                             </span>
                         </div>
                         <div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Legal Act</span>
-                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1 block">
-                                Label Lens Verification Guidelines
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Statutory Framework</span>
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1 block">
+                                {unifiedReport.legalAct}
                             </span>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        {/* Packaging Photo Preview */}
                         <div className="lg:col-span-1">
                             <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Packaging Photo Evidence</h3>
                             <div className="w-full h-72 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden flex items-center justify-center text-5xl">
@@ -435,10 +376,11 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             </div>
                         </div>
 
+                        {/* Category-Aware Declarations Audit Checklist */}
                         <div className="lg:col-span-2">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase">
-                                    Rules, 2011 Declaration Checklist
+                                    Declarations Audit Checklist ({resolvedCategory})
                                 </h3>
                                 <button
                                     onClick={openEditModal}
@@ -447,48 +389,57 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                     <Edit2 size={12} /> Edit Details
                                 </button>
                             </div>
-                            <div className="space-y-3">
-                                {(Object.keys(declarationLabels) as Array<keyof typeof declarationLabels>).map((key) => {
-                                    const item = currentProduct.declarations[key] || { present: false, value: null };
-                                    const meta = declarationLabels[key];
-                                    const displayValue = key === 'mrp' && !item.value && currentProduct.mrp ? currentProduct.mrp : item.value;
-                                    const isPresent = item.present || (key === 'mrp' && Boolean(currentProduct.mrp));
+                            <div className="space-y-2.5">
+                                {unifiedReport.checklist.map((item, idx) => {
+                                    const isPass = item.status === 'PASS';
+                                    const isNotApp = item.status === 'NOT APPLICABLE';
 
                                     return (
-                                        <div key={key} className={`flex items-center justify-between gap-4 p-3.5 rounded-2xl border ${
-                                            isPresent
-                                                ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
-                                                : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/30'
-                                        }`}>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isPresent}
-                                                        readOnly
-                                                        className="w-4 h-4 rounded text-blue-655 cursor-default"
-                                                    />
-                                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{meta.label}</h4>
-                                                    {meta.mandatory && (
-                                                        <span className="text-[9px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                            Mandatory
-                                                        </span>
-                                                    )}
+                                        <div
+                                            key={idx}
+                                            className={`flex items-center justify-between gap-4 p-3.5 rounded-2xl border transition-all ${
+                                                isNotApp
+                                                    ? 'bg-gray-50/60 dark:bg-gray-900/30 border-gray-200/50 dark:border-gray-800 text-gray-400'
+                                                    : isPass
+                                                    ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
+                                                    : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/30'
+                                            }`}
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{item.field}</h4>
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                                        isNotApp
+                                                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                                                            : 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
+                                                    }`}>
+                                                        {item.requirement}
+                                                    </span>
                                                 </div>
-                                                {isPresent && displayValue && (
-                                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700 px-2.5 py-1 rounded-lg mt-1.5 inline-block max-w-[380px] truncate">
-                                                        "{displayValue}"
+                                                
+                                                {item.value && item.value !== 'N/A' && (
+                                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700 px-2.5 py-1 rounded-lg mt-1.5 inline-block max-w-full truncate">
+                                                        "{item.value}"
                                                     </p>
                                                 )}
+
+                                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
+                                                    {item.validationDetails}
+                                                </p>
                                             </div>
+
                                             <div className="shrink-0">
-                                                {isPresent ? (
+                                                {isNotApp ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-500">
+                                                        — N/A
+                                                    </span>
+                                                ) : isPass ? (
                                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                                                        ✔️ Pass
+                                                        <CheckCircle size={12} /> PASS
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
-                                                        ❌ Fail
+                                                        <AlertCircle size={12} /> FAIL
                                                     </span>
                                                 )}
                                             </div>
@@ -499,6 +450,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
                     </div>
 
+                    {/* Rule Violations Section */}
                     <div className="mb-8 p-6 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/30 rounded-2xl">
                         <h3 className="text-sm font-bold text-rose-800 dark:text-rose-400 flex items-center gap-2 mb-4">
                             <AlertTriangle size={18} />
@@ -506,7 +458,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </h3>
                         {currentProduct.violations.length === 0 ? (
                             <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                                No packaging rule violations found. All mandatory declarations met.
+                                No packaging rule violations found. All mandatory declarations for {resolvedCategory} are met.
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -527,6 +479,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         )}
                     </div>
 
+                    {/* Inspector Field Notes */}
                     <div className="no-print">
                         <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-3">Inspector Field Notes</h3>
                         {isEditingNotes ? (
@@ -572,6 +525,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 </div>
             </div>
 
+            {/* Product Edit Modal */}
             {isEditingProduct && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto no-print">
                     <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-3xl w-full border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden my-8">
@@ -579,10 +533,10 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             <div>
                                 <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
                                     <Edit2 size={20} className="text-emerald-600" />
-                                    Edit Product Declarations & Details
+                                    Edit Product Declarations & Category
                                 </h2>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    Modify existing values, add missing fields, or clear unwanted information.
+                                    Modify values, change category, or update sectoral regulatory fields.
                                 </p>
                             </div>
                             <button
@@ -594,6 +548,22 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         </div>
 
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                            {/* Category Selector */}
+                            <div className="p-3.5 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-900/40">
+                                <label className="block text-xs font-bold text-blue-900 dark:text-blue-200 mb-1">
+                                    📦 Product Category
+                                </label>
+                                <select
+                                    value={editCategory}
+                                    onChange={(e) => handleEditCategoryChange(e.target.value as ProductCategory)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                                >
+                                    {ALL_CATEGORIES.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -705,18 +675,37 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                         className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
+
+                                {/* Dynamic Regulatory Field for Selected Category */}
                                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                        🛡️ FSSAI License No. (14 digits)
+                                        🛡️ {editCategorySpec.regulatoryField.label}
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={editFssaiLicense}
-                                        onChange={(e) => setEditFssaiLicense(e.target.value)}
-                                        placeholder="e.g. 10012022000046"
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
-                                    />
+                                    {editCategory === 'Food & Beverage' ? (
+                                        <input
+                                            type="text"
+                                            value={editFssaiLicense}
+                                            onChange={(e) => {
+                                                setEditFssaiLicense(e.target.value);
+                                                setEditRegulatoryLicense(e.target.value);
+                                            }}
+                                            placeholder="e.g. 10012022000046 (14 digits)"
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                        />
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={editRegulatoryLicense}
+                                            onChange={(e) => {
+                                                setEditRegulatoryLicense(e.target.value);
+                                                setEditFssaiLicense(e.target.value);
+                                            }}
+                                            placeholder={editCategorySpec.regulatoryField.placeholder}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                        />
+                                    )}
                                 </div>
+
                                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                                         🌐 Country of Origin
@@ -741,37 +730,17 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                         className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                     />
                                 </div>
-                                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                            📦 Commodity Category
-                                        </label>
-                                        <select
-                                            value={editCategory}
-                                            onChange={(e) => setEditCategory(e.target.value)}
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                        >
-                                            <option value="Food & Beverage">Food & Beverage</option>
-                                            <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
-                                            <option value="Pharmaceuticals & Drugs">Pharmaceuticals & Drugs</option>
-                                            <option value="Electronics & Appliances">Electronics & Appliances</option>
-                                            <option value="Apparel & Textiles">Apparel & Textiles</option>
-                                            <option value="Household Commodities">Household Commodities</option>
-                                            <option value="General Packaged Commodity">General Packaged Commodity</option>
-                                        </select>
-                                    </div>
-                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                            📝 Inspector Notes
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editNotes}
-                                            onChange={(e) => setEditNotes(e.target.value)}
-                                            placeholder="e.g. Verified at retail store inspection"
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                        />
-                                    </div>
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📝 Inspector Notes
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editNotes}
+                                        onChange={(e) => setEditNotes(e.target.value)}
+                                        placeholder="e.g. Verified at retail store inspection"
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
                                 </div>
                             </div>
                         </div>

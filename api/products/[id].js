@@ -48,6 +48,7 @@ export default async function handler(req, res) {
                 rawExtractedText: existingProduct.rawExtractedText || '',
                 imageData: existingProduct.imageData || null,
                 category: existingProduct.category || null,
+                regulatoryLicense: existingProduct.regulatoryLicense || existingProduct.declarations?.regulatoryLicense?.value || existingProduct.declarations?.fssaiLicense?.value || null,
                 notes: existingProduct.notes || null
             });
         }
@@ -59,6 +60,7 @@ export default async function handler(req, res) {
                 barcode,
                 mrp,
                 category,
+                regulatoryLicense,
                 notes,
                 declarations,
                 violations,
@@ -77,6 +79,13 @@ export default async function handler(req, res) {
                 updates.mrp = declarations.mrp.value || null;
             }
             if (category !== undefined) updates.category = category || null;
+            if (regulatoryLicense !== undefined) {
+                updates.regulatoryLicense = regulatoryLicense || null;
+            } else if (declarations?.regulatoryLicense !== undefined) {
+                updates.regulatoryLicense = declarations.regulatoryLicense.value || null;
+            } else if (declarations?.fssaiLicense !== undefined) {
+                updates.regulatoryLicense = declarations.fssaiLicense.value || null;
+            }
             if (notes !== undefined) updates.notes = notes || null;
             if (declarations !== undefined) updates.declarations = declarations;
             if (violations !== undefined) updates.violations = violations;
@@ -105,6 +114,7 @@ export default async function handler(req, res) {
                 rawExtractedText: updatedProduct.rawExtractedText || '',
                 imageData: updatedProduct.imageData || null,
                 category: updatedProduct.category || null,
+                regulatoryLicense: updatedProduct.regulatoryLicense || updatedProduct.declarations?.regulatoryLicense?.value || updatedProduct.declarations?.fssaiLicense?.value || null,
                 notes: updatedProduct.notes || null
             });
         }

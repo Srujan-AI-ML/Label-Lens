@@ -1,10 +1,20 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from './CameraModal';
-import { detectBarcode, lookupProduct, extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
+import { detectBarcode, lookupProduct, extractTextFromImage as _extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
 import { analyseCompliance, buildScanResult, validateProductSpecifics, calculateUnitSalePrice } from '../services/complianceService';
 import {
-    X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine
+    ALL_CATEGORIES,
+    CATEGORY_REQUIREMENTS,
+    detectProductCategory,
+    normalizeCategory,
+    validateBarcodeGTIN,
+    validateFSSAI,
+    validateCategoryLicense,
+    type ProductCategory,
+} from '../services/categoryRequirements';
+import {
+    X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine, CheckCircle, AlertCircle
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 
@@ -40,14 +50,17 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     const [manufacturer, setManufacturer] = useState('');
     const [consumerCare, setConsumerCare] = useState('');
     const [fssaiLicense, setFssaiLicense] = useState('');
+    const [regulatoryLicense, setRegulatoryLicense] = useState('');
     const [countryOfOrigin, setCountryOfOrigin] = useState('India');
     const [unitPrice, setUnitPrice] = useState('');
-    const [category, setCategory] = useState('Food & Beverage');
+    const [category, setCategory] = useState<ProductCategory>('Food & Beverage');
     const [notes, setNotes] = useState('');
     const [_rawText, setRawText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const currentCategorySpec = CATEGORY_REQUIREMENTS[category] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
 
     const handleNetQuantityChange = (val: string) => {
         setNetQuantity(val);
@@ -77,6 +90,33 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         }
     };
 
+    const handleCategoryChange = (newCat: ProductCategory) => {
+        setCategory(newCat);
+        if (newCat === 'Food & Beverage') {
+            if (!fssaiLicense && regulatoryLicense) {
+                setFssaiLicense(regulatoryLicense);
+            }
+        } else {
+            if (!regulatoryLicense && fssaiLicense) {
+                setRegulatoryLicense(fssaiLicense);
+            }
+        }
+    };
+
+    // Live validation states
+    const barcodeValidation = useMemo(() => {
+        return validateBarcodeGTIN(barcode);
+    }, [barcode]);
+
+    const activeRegulatoryValue = category === 'Food & Beverage' ? fssaiLicense : regulatoryLicense;
+
+    const regulatoryValidation = useMemo(() => {
+        if (category === 'Food & Beverage') {
+            return validateFSSAI(fssaiLicense);
+        }
+        return validateCategoryLicense(category, regulatoryLicense);
+    }, [category, fssaiLicense, regulatoryLicense]);
+
     // Build synthesized label text from the specific fields
     const synthesizedText = useMemo(() => {
         const parts: string[] = [];
@@ -87,16 +127,35 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         if (mfgDate) parts.push(`Mfg Date: ${mfgDate}`);
         if (expiryDate) parts.push(`Best Before: ${expiryDate}`);
         if (consumerCare) parts.push(`Consumer Care: ${consumerCare}`);
-        if (fssaiLicense) parts.push(`FSSAI Lic No: ${fssaiLicense}`);
+        if (fssaiLicense && category === 'Food & Beverage') parts.push(`FSSAI Lic No: ${fssaiLicense}`);
+        if (regulatoryLicense && category !== 'Food & Beverage') parts.push(`${currentCategorySpec.regulatoryField.label}: ${regulatoryLicense}`);
         if (countryOfOrigin) parts.push(`Country of Origin: ${countryOfOrigin}`);
         if (unitPrice) parts.push(`Unit Sale Price: ${unitPrice}`);
         return parts.join('\n');
-    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, countryOfOrigin, unitPrice]);
+    }, [productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category, currentCategorySpec]);
 
-    // Live Legal Metrology Compliance Analysis
+    // Live Category-Aware Legal Metrology Compliance Analysis
     const liveAnalysis = useMemo(() => {
-        return analyseCompliance(synthesizedText, productName || 'Inspected Product');
-    }, [synthesizedText, productName]);
+        return analyseCompliance(
+            synthesizedText,
+            {
+                productName: productName || 'Inspected Product',
+                mrp,
+                netQuantity,
+                quantityUnit,
+                manufactureDate: mfgDate,
+                expiryDate,
+                manufacturer,
+                consumerCare,
+                fssaiLicense: category === 'Food & Beverage' ? fssaiLicense : '',
+                regulatoryLicense: category !== 'Food & Beverage' ? regulatoryLicense : '',
+                countryOfOrigin,
+                unitPrice,
+                category
+            },
+            category
+        );
+    }, [synthesizedText, productName, mrp, netQuantity, quantityUnit, mfgDate, expiryDate, manufacturer, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category]);
 
     if (!isOpen) return null;
 
@@ -124,12 +183,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         if (!dateStr) return '';
         const cleanStr = dateStr.trim();
 
-        // 1. If it's already YYYY-MM-DD, return it
         if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
             return cleanStr;
         }
 
-        // 2. If it's DD.MM.YY(YY) or DD/MM/YY(YY) or DD-MM-YY(YY)
         const dmyMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})$/);
         if (dmyMatch) {
             const day = dmyMatch[1].padStart(2, '0');
@@ -139,7 +196,6 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             return `${year}-${month}-${day}`;
         }
 
-        // 3. If it's MM/YY(YY) or MM.YY(YY) or MM-YY(YY)
         const myMatch = cleanStr.match(/^(\d{1,2})[\.\/\-](\d{2,4})$/);
         if (myMatch) {
             const month = myMatch[1].padStart(2, '0');
@@ -148,7 +204,6 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             return `${year}-${month}-01`;
         }
 
-        // 4. If month name format e.g. "JAN 2026", "MAY-2026", "15 MAY 2026"
         const monthNames: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
         const monthNameMatch = cleanStr.match(/(?:(\d{1,2})[\s\.\/\-]*)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\.\/\-]*(\d{2,4})/i);
         if (monthNameMatch) {
@@ -160,7 +215,6 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             return `${year}-${month}-${day}`;
         }
 
-        // 5. Try parsing with standard Date object
         const parsed = new Date(cleanStr);
         if (!isNaN(parsed.getTime())) {
             const year = parsed.getFullYear();
@@ -173,7 +227,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     };
 
     const autoPopulateFromText = (extractedText: string, currentName: string = '', currentBarcode: string = '') => {
-        const analysis = analyseCompliance(extractedText, currentName);
+        const analysis = analyseCompliance(extractedText, currentName, category);
         const decs = analysis.declarations;
 
         if (decs.genericName?.present && decs.genericName.value) {
@@ -212,11 +266,9 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         }
         if (decs.fssaiLicense?.present && decs.fssaiLicense.value) {
             const fssaiMatch = decs.fssaiLicense.value.match(/\d{14}/);
-            if (fssaiMatch) {
-                setFssaiLicense(fssaiMatch[0]);
-            } else {
-                setFssaiLicense(decs.fssaiLicense.value);
-            }
+            const val = fssaiMatch ? fssaiMatch[0] : decs.fssaiLicense.value;
+            setFssaiLicense(val);
+            setRegulatoryLicense(val);
         }
         if (decs.countryOfOrigin?.present && decs.countryOfOrigin.value) {
             const cleanOrigin = decs.countryOfOrigin.value.replace(/\(inferred\)/i, '').trim();
@@ -237,7 +289,6 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     };
 
     const processUploadedImage = async (imageSrc: string) => {
-        // Reset specific fields before scanning
         setProductName('');
         setBarcode('');
         setNetQuantity('');
@@ -247,6 +298,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         setManufacturer('');
         setConsumerCare('');
         setFssaiLicense('');
+        setRegulatoryLicense('');
         setCountryOfOrigin('India');
         setUnitPrice('');
         setNotes('');
@@ -277,7 +329,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 console.warn('Modal barcode detection notice:', barcodeErr);
             }
 
-            // Step 2: Google Gemini AI Multimodal Vision Analysis
+            // Step 2: Google Gemini AI Multimodal Vision Analysis (Preserved)
             setStatusMsg('Extracting packaging declarations with Google Gemini AI...');
             const scanResult = await scanProductImageWithGemini(imageSrc);
             const { text, product } = scanResult;
@@ -286,7 +338,15 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 setRawText(text);
             }
 
-            // Step 3: Populate modal input fields directly from structured Gemini data
+            // Step 3: Category Detection
+            const catDetection = detectProductCategory(
+                text || '',
+                product?.productName || detectedName || '',
+                product?.brand || ''
+            );
+            setCategory(catDetection.category);
+
+            // Step 4: Populate modal input fields directly from structured Gemini data
             if (product) {
                 if (product.productName) {
                     setProductName(product.productName);
@@ -328,7 +388,9 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 }
                 if (product.fssaiLicense) {
                     const fMatch = String(product.fssaiLicense).match(/\d{14}/);
-                    setFssaiLicense(fMatch ? fMatch[0] : String(product.fssaiLicense));
+                    const licVal = fMatch ? fMatch[0] : String(product.fssaiLicense);
+                    setFssaiLicense(licVal);
+                    setRegulatoryLicense(licVal);
                 }
                 if (product.countryOfOrigin) {
                     setCountryOfOrigin(product.countryOfOrigin);
@@ -343,12 +405,12 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 }
             }
 
-            // Step 4: Fallback auto-populate on raw text
+            // Step 5: Fallback auto-populate on raw text
             if (text && text.trim()) {
                 autoPopulateFromText(text, detectedName, detectedBarcode);
             }
 
-            setStatusMsg('✅ Declarations detected & extracted! Review specifics in grid.');
+            setStatusMsg(`✅ Declarations extracted & classified as [${catDetection.category}]! Review specifics in grid.`);
 
         } catch (err: any) {
             console.error('Scan processing error:', err);
@@ -369,7 +431,9 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             mrp,
             mfgDate,
             expiryDate,
-            fssaiLicense
+            fssaiLicense,
+            regulatoryLicense,
+            category
         });
 
         if (!validation.isValid) {
@@ -391,12 +455,15 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                     expiryDate: expiryDate.trim(),
                     manufacturer: manufacturer.trim(),
                     consumerCare: consumerCare.trim(),
-                    fssaiLicense: fssaiLicense.trim(),
+                    fssaiLicense: category === 'Food & Beverage' ? fssaiLicense.trim() : undefined,
+                    regulatoryLicense: category !== 'Food & Beverage' ? regulatoryLicense.trim() : undefined,
                     countryOfOrigin: countryOfOrigin.trim(),
-                    unitPrice: unitPrice.trim()
+                    unitPrice: unitPrice.trim(),
+                    category
                 },
                 barcode.trim() || undefined,
-                imagePreview || undefined
+                imagePreview || undefined,
+                category
             );
             scanData.category = category;
             scanData.notes = notes;
@@ -424,31 +491,32 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         setManufacturer('');
         setConsumerCare('');
         setFssaiLicense('');
+        setRegulatoryLicense('');
         setCountryOfOrigin('India');
         setUnitPrice('');
+        setCategory('Food & Beverage');
         setNotes('');
         setRawText('');
         setImagePreview(null);
         setStatusMsg('');
     };
 
-    const ruleFields: Array<{
-        key: keyof ComplianceDeclarations;
-        emoji: string;
-        label: string;
-        mandatory: boolean;
-    }> = [
-        { key: 'genericName', emoji: '🏷️', label: '1. Product Identity / Generic Name', mandatory: true },
-        { key: 'netQuantity', emoji: '⚖️', label: '2. Net Quantity (Weight/Vol/Count)', mandatory: true },
-        { key: 'mrp', emoji: '💰', label: '3. Maximum Retail Price (MRP incl taxes)', mandatory: true },
-        { key: 'manufactureDate', emoji: '📅', label: '4. Date of Manufacture / Packing', mandatory: true },
-        { key: 'bestBefore', emoji: '⌛', label: '5. Best Before / Expiry Date', mandatory: false },
-        { key: 'manufacturer', emoji: '🏭', label: '6. Manufacturer / Packer Address', mandatory: true },
-        { key: 'consumerCare', emoji: '📞', label: '7. Consumer Care Helpline & Email', mandatory: true },
-        { key: 'fssaiLicense', emoji: '🛡️', label: '8. FSSAI 14-Digit License No.', mandatory: false },
-        { key: 'countryOfOrigin', emoji: '🌐', label: '9. Country of Origin (Imports)', mandatory: false },
-        { key: 'retailSalePrice', emoji: '💵', label: '10. Unit Sale Price Breakdown', mandatory: false },
-    ];
+    // Category-specific checklist items
+    const dynamicChecklistItems = useMemo(() => {
+        return currentCategorySpec.mandatoryDeclarations.map(decl => {
+            const declObj = liveAnalysis.declarations[decl.key] || (decl.key === currentCategorySpec.regulatoryField.key ? liveAnalysis.declarations.regulatoryLicense : undefined);
+            const isNotApp = decl.requirement === 'NOT_APPLICABLE';
+            const isPass = declObj?.present && declObj?.status !== 'FAIL';
+
+            return {
+                key: decl.key,
+                label: decl.label,
+                requirement: decl.requirement,
+                isNotApp,
+                isPass,
+            };
+        });
+    }, [currentCategorySpec, liveAnalysis]);
 
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
@@ -462,7 +530,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-white leading-tight">+ Add & Scan Product Declarations</h2>
-                            <p className="text-xs text-white/80">Label Lens Compliance Verifier</p>
+                            <p className="text-xs text-white/80">Category-Aware Legal Metrology Verifier</p>
                         </div>
                     </div>
 
@@ -542,7 +610,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                         </div>
                     )}
 
-                    {/* Upload Dropzone Area (Visible when Upload Tab is selected) */}
+                    {/* Upload Dropzone Area */}
                     {activeTab === 'upload' && (
                         <div
                             onClick={() => fileInputRef.current?.click()}
@@ -559,18 +627,31 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 <Upload size={26} />
                             </div>
                             <h3 className="font-bold text-sm text-gray-900 dark:text-white">Click or Drag & Drop Packaging Image</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Supports JPG, PNG, WEBP — Auto-extracts barcode & label text</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Supports JPG, PNG, WEBP — Auto-extracts declarations and detects category</p>
                         </div>
                     )}
 
-                    {/* Two Column Grid: (Left) Specifics Fields Grid | (Right) Live 2011 Rules Checklist Side Box */}
+                    {/* Two Column Grid: (Left) Specifics Fields Grid | (Right) Category-Aware Checklist Side Box */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         
-                        {/* Specifics Grid (2 Cols wide on desktop) */}
+                        {/* Specifics Grid */}
                         <div className="lg:col-span-2 space-y-4">
-                            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 flex items-center gap-2">
-                                <span>📋</span> Product Specifics & Declarations Grid
-                            </h3>
+                            
+                            {/* Category Selector Bar */}
+                            <div className="p-3.5 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-900/40">
+                                <label className="block text-xs font-bold text-blue-900 dark:text-blue-200 mb-1.5 flex items-center justify-between">
+                                    <span>📦 Product Category (Tailors Required Regulatory Fields)</span>
+                                </label>
+                                <select
+                                    value={category}
+                                    onChange={(e) => handleCategoryChange(e.target.value as ProductCategory)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                                >
+                                    {ALL_CATEGORIES.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 
@@ -630,11 +711,22 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                     />
                                 </div>
 
-                                {/* 4. Barcode / UPC */}
+                                {/* 4. Barcode / GTIN */}
                                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                        <span>🔍</span> Barcode / GTIN Number
-                                    </label>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                            <span>🔍</span> Barcode / GTIN Number
+                                        </label>
+                                        {barcode && (
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                barcodeValidation.isValid
+                                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                                    : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                                            }`}>
+                                                {barcodeValidation.isValid ? '✓ Valid GTIN' : '✗ Invalid'}
+                                            </span>
+                                        )}
+                                    </div>
                                     <input
                                         type="text"
                                         placeholder="e.g. 8901058005080"
@@ -673,7 +765,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 {/* 7. Manufacturer & Address (Full width) */}
                                 <div className="sm:col-span-2 p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                        <span>🏭</span> Name & Complete Address of Manufacturer / Packer / Importer *
+                                        <span>🏭</span> Name & Complete Address of Manufacturer / Packer *
                                     </label>
                                     <input
                                         type="text"
@@ -698,18 +790,45 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                     />
                                 </div>
 
-                                {/* 9. FSSAI License Number */}
+                                {/* 9. Dynamic Category-Specific Regulatory Field */}
                                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                                        <span>🛡️</span> FSSAI License No. (14 digits)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 10015043001129"
-                                        value={fssaiLicense}
-                                        onChange={(e) => setFssaiLicense(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
-                                    />
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                            <span>🛡️</span> {currentCategorySpec.regulatoryField.label}
+                                        </label>
+                                        {activeRegulatoryValue && (
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                regulatoryValidation.isValid
+                                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                                    : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                                            }`}>
+                                                {regulatoryValidation.statusText}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {category === 'Food & Beverage' ? (
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. 10015043001129 (14 digits)"
+                                            value={fssaiLicense}
+                                            onChange={(e) => {
+                                                setFssaiLicense(e.target.value);
+                                                setRegulatoryLicense(e.target.value);
+                                            }}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                        />
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            placeholder={currentCategorySpec.regulatoryField.placeholder}
+                                            value={regulatoryLicense}
+                                            onChange={(e) => {
+                                                setRegulatoryLicense(e.target.value);
+                                                setFssaiLicense(e.target.value);
+                                            }}
+                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono"
+                                        />
+                                    )}
                                 </div>
 
                                 {/* 10. Country of Origin */}
@@ -740,38 +859,18 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                     />
                                 </div>
 
-                                {/* 12. Category & Notes (Full width) */}
-                                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                            📦 Commodity Category
-                                        </label>
-                                        <select
-                                            value={category}
-                                            onChange={(e) => setCategory(e.target.value)}
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                        >
-                                            <option value="Food & Beverage">Food & Beverage</option>
-                                            <option value="Cosmetics & Personal Care">Cosmetics & Personal Care</option>
-                                            <option value="Pharmaceutical / Health">Pharmaceutical / Health</option>
-                                            <option value="Household & Cleaning">Household & Cleaning</option>
-                                            <option value="Electronics & Electricals">Electronics & Electricals</option>
-                                            <option value="Other Packaged Goods">Other Packaged Goods</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
-                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                            📝 Inspector Field Notes
-                                        </label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. Retail store inspection at Sector 4..."
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                                        />
-                                    </div>
+                                {/* 12. Inspector Notes */}
+                                <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200/70 dark:border-gray-700">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                        📝 Inspector Field Notes
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Retail store inspection at Sector 4..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -782,33 +881,37 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 <div className="flex items-center justify-between pb-2.5 border-b border-gray-200 dark:border-gray-700">
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                                            Rules, 2011 Checklist
+                                            Compliance Checklist
                                         </h4>
-                                        <p className="text-[10px] text-gray-500">Live Verification Status</p>
+                                        <p className="text-[10px] text-gray-500">{category}</p>
                                     </div>
-                                    <span className="text-lg font-black text-blue-600 dark:text-blue-400">
+                                    <span className={`text-lg font-black ${
+                                        liveAnalysis.complianceScore === 100
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : liveAnalysis.complianceScore > 50
+                                            ? 'text-amber-500'
+                                            : 'text-rose-600'
+                                    }`}>
                                         {liveAnalysis.complianceScore}%
                                     </span>
                                 </div>
 
-                                <div className="space-y-2">
-                                    {ruleFields.map(({ key, emoji, label }) => {
-                                        const isCompliant = liveAnalysis.declarations[key]?.present;
+                                <div className="space-y-1.5">
+                                    {dynamicChecklistItems.map((item) => {
                                         return (
                                             <div
-                                                key={key}
+                                                key={item.key}
                                                 className={`flex items-center justify-between p-2 rounded-xl border text-[11px] font-semibold transition-all ${
-                                                    isCompliant
+                                                    item.isNotApp
+                                                        ? 'bg-gray-100/60 dark:bg-gray-800/40 border-gray-200/50 dark:border-gray-700 text-gray-400 dark:text-gray-500'
+                                                        : item.isPass
                                                         ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/40 text-emerald-900 dark:text-emerald-300'
                                                         : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40 text-rose-900 dark:text-rose-300'
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-1.5 truncate pr-2">
-                                                    <span>{emoji}</span>
-                                                    <span className="truncate">{label}</span>
-                                                </div>
+                                                <span className="truncate pr-2">{item.label}</span>
                                                 <span className="font-bold shrink-0">
-                                                    {isCompliant ? '✔️ Pass' : '❌ Fail'}
+                                                    {item.isNotApp ? '— N/A' : item.isPass ? '✔️ Pass' : '❌ Fail'}
                                                 </span>
                                             </div>
                                         );

@@ -37,6 +37,7 @@ export default async function handler(req, res) {
                 rawExtractedText: p.rawExtractedText || '',
                 imageData: p.imageData || null,
                 category: p.category || null,
+                regulatoryLicense: p.regulatoryLicense || p.declarations?.regulatoryLicense?.value || p.declarations?.fssaiLicense?.value || null,
                 notes: p.notes || null,
             }));
             return res.status(200).json(result);
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
             const {
                 productName, barcode, scannedAt, rawExtractedText,
                 complianceScore, complianceStatus, declarations,
-                violations, imageData, category, notes, mrp
+                violations, imageData, category, regulatoryLicense, notes, mrp
             } = req.body || {};
 
             if (!productName || complianceScore === undefined || !declarations) {
@@ -67,6 +68,7 @@ export default async function handler(req, res) {
                 violations: violations || [],
                 imageData: imageData || null,
                 category: category || null,
+                regulatoryLicense: regulatoryLicense || declarations?.regulatoryLicense?.value || declarations?.fssaiLicense?.value || null,
                 notes: notes || null,
                 createdAt: new Date(),
             };

@@ -1,7 +1,7 @@
 // ============================================================
-// Legal Metrology Compliance Checking Service
-// Validates extracted label text against the Legal Metrology
-// (Packaged Commodities) Rules, 2011
+// Legal Metrology & Sectoral Regulatory Compliance Checking Service
+// Validates extracted label text against Legal Metrology Rules, 2011
+// and category-specific statutory requirements (FSSAI, CDSCO, BIS, etc.)
 // ============================================================
 
 import type {
@@ -11,15 +11,35 @@ import type {
   ComplianceStatus,
   ScannedProduct,
 } from '../types';
+import {
+  type ProductCategory,
+  normalizeCategory,
+  CATEGORY_REQUIREMENTS,
+  validateFSSAI,
+  validateBarcodeGTIN,
+  validateCategoryLicense,
+} from './categoryRequirements';
 
 // ---- Helpers ------------------------------------------------
 
 function makeDeclaration(
   present: boolean,
   value: string | null,
-  confidence: 'high' | 'medium' | 'low' = 'high'
+  confidence: 'high' | 'medium' | 'low' = 'high',
+  status?: 'PASS' | 'FAIL' | 'NOT_APPLICABLE',
+  validationStatus?: string,
+  validationMessage?: string,
+  requirement?: 'REQUIRED' | 'OPTIONAL' | 'NOT_APPLICABLE'
 ): ComplianceDeclaration {
-  return { present, value, confidence };
+  return {
+    present,
+    value,
+    confidence,
+    status: status || (present ? 'PASS' : 'FAIL'),
+    validationStatus,
+    validationMessage,
+    requirement: requirement || (present ? 'REQUIRED' : 'OPTIONAL'),
+  };
 }
 
 function firstMatch(text: string, patterns: RegExp[]): string | null {
@@ -52,7 +72,7 @@ export function normalizeOCRText(rawText: string): string {
   return text;
 }
 
-// ---- Declaration Extractors ---------------------------------
+// ---- Semantic Declaration Extractors ---------------------------------
 
 function cleanProductNameString(raw: string): string {
   return raw
@@ -63,8 +83,8 @@ function cleanProductNameString(raw: string): string {
 }
 
 function extractGenericName(text: string): ComplianceDeclaration {
-  // 1. Explicit tag check (Product Name:, Commodity:, Item Name:)
-  const explicitPattern = /(?:product(?:\s*name)?|commodity|item(?:\s*name)?|product\s*identity|common\s*name)\s*[:\-]\s*([^\n\r]{3,60})/i;
+  // 1. Explicit tag check
+  const explicitPattern = /(?:product(?:\s*name)?|commodity|item(?:\s*name)?|product\s*identity|common\s*name|generic\s*name)\s*[:\-]\s*([^\n\r]{3,60})/i;
   const expMatch = text.match(explicitPattern);
   if (expMatch && expMatch[1]) {
     const clean = cleanProductNameString(expMatch[1]);
@@ -80,14 +100,19 @@ function extractGenericName(text: string): ComplianceDeclaration {
     'ORGANIC INDIA', 'BRITANNIA', 'PARLE', 'MAGGI', 'AMUL', 'NESTLE',
     'DABUR', 'HALDIRAM', 'LAYS', 'CADBURY', 'PATANJALI', 'TATA', 'FORTUNE',
     'HALDIRAMS', 'MOTHER DAIRY', 'EPIGAMIA', 'RAW', 'PAPER BOAT', 'MUNCH',
-    'GOOD DAY', 'PARLE-G', 'SUNFEAST', 'MARICO', 'SAFFOLA', 'SLURRP FARM'
+    'GOOD DAY', 'PARLE-G', 'SUNFEAST', 'MARICO', 'SAFFOLA', 'SLURRP FARM',
+    'NIVEA', 'LOREAL', 'HIMALAYA', 'DETTOL', 'HARPIC', 'PHILIPS', 'HAVELLS',
+    'SYSKA', 'BOAT', 'CIPLA', 'SUN PHARMA', 'LUPIN', 'MANKIND'
   ];
 
   const productKeywords = [
     'BASMATI RICE', 'ORGANIC BASMATI RICE', 'RICE', 'COOKIES', 'BISCUITS',
     'NOODLES', 'BUTTER', 'MILK', 'ATTA', 'FLOUR', 'OIL', 'GHEE', 'SPICES',
     'TEA', 'COFFEE', 'JUICE', 'SNACKS', 'SALT', 'SUGAR', 'PULSES', 'DAL',
-    'HONEY', 'OATS', 'CHIPS', 'CHOCOLATE', 'PASTA', 'VERMICELLI', 'RAVA'
+    'HONEY', 'OATS', 'CHIPS', 'CHOCOLATE', 'PASTA', 'VERMICELLI', 'RAVA',
+    'FACE WASH', 'FACE CREAM', 'BODY LOTION', 'SHAMPOO', 'SUNSCREEN', 'SERUM',
+    'TABLETS', 'CAPSULES', 'SYRUP', 'OINTMENT', 'LED BULB', 'ELECTRIC IRON',
+    'FLOOR CLEANER', 'DISHWASH', 'DETERGENT', 'COTTON SHIRT', 'TOY CAR'
   ];
 
   const excludePatterns = [
@@ -146,7 +171,7 @@ function extractGenericName(text: string): ComplianceDeclaration {
 }
 
 function extractManufacturer(text: string): ComplianceDeclaration {
-  const pattern = /(?:manufactured\s*(?:&|and)?\s*packed\s*by|manufactured\s*by|mfd\.?\s*by|packed\s*by|marketed\s*by|imported\s*by|distributed\s*by|dist\.?\s*by|manufacturer\s*address|packer\s*address|manufacturer|packer|importer)\s*[:\-]?\s*([^\n\r]+(?:\n[^\n\r]+){0,3})/i;
+  const pattern = /(?:manufactured\s*(?:&|and)?\s*(?:packed|marketed)?\s*by|mfd\.?\s*(?:&|and)?\s*pkd\.?\s*by|mfd\.?\s*by|mfg\.?\s*by|packed\s*by|marketed\s*by|imported\s*by|distributed\s*by|dist\.?\s*by|manufacturer\s*address|packer\s*address|manufacturer|packer|importer)\s*[:\-]?\s*([^\n\r]+(?:\n[^\n\r]+){0,3})/i;
   const match = text.match(pattern);
   if (match && match[1]) {
     let block = match[1].trim();
@@ -161,7 +186,7 @@ function extractManufacturer(text: string): ComplianceDeclaration {
     }
     const cleaned = block.replace(/[\r\n]+/g, ', ').replace(/\s*,\s*/g, ', ').replace(/,+$/, '').trim();
 
-    const validAddressIndicators = /\b(?:pvt|ltd|limited|inc|corp|llc|industries|products|foods|enterprises|plot|street|road|industrial|area|phase|village|city|state|pin|india|dist|sector|building|floor|crossing|mumbai|delhi|bangalore|hyderabad|chennai|kolkata|pune|ahmedabad|goa|karnataka|maharashtra|tamil|uttar|haryana|gujarat)\b/i;
+    const validAddressIndicators = /\b(?:pvt|ltd|limited|inc|corp|llc|industries|products|foods|laboratories|enterprises|plot|street|road|industrial|area|phase|village|city|state|pin|india|dist|sector|building|floor|crossing|mumbai|delhi|bangalore|hyderabad|chennai|kolkata|pune|ahmedabad|goa|karnataka|maharashtra|tamil|uttar|haryana|gujarat)\b/i;
     const invalidIndicators = /\b(?:protein|fat|carbohydrate|sugar|kcal|barcode|gtin|mrp|exp|mfg)\b/i;
 
     if (cleaned.length >= 5 && validAddressIndicators.test(cleaned) && !invalidIndicators.test(cleaned)) {
@@ -209,7 +234,7 @@ function extractManufactureDate(text: string): ComplianceDeclaration {
 
 function extractBestBefore(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:best\s*b[e|o]?fore?|use\s*by|expiry\s*date|exp\.?\s*date|expiry|bbe|best\s*by|use\s*before|valid\s*up\s*to)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
+    /(?:best\s*b[e|o]?fore?|use\s*by|expiry\s*date|exp\.?\s*date|expires\s*on|expiry|bbe|best\s*by|use\s*before|valid\s*till|valid\s*until|valid\s*up\s*to)\s*[:\-]?\s*([0-9A-Za-z\s\/\-\.]{3,25})/i,
     /\b(?:exp|expiry)\s*[:\-\s]?\s*(\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
     /(?:best\s*before\s*([0-9]+\s*(?:months?|days?|years?|weeks?)(?:\s*from\s*(?:mfg|mfd|pkd|packing|manufacture|date))?))/i
   ];
@@ -226,7 +251,7 @@ function extractBestBefore(text: string): ComplianceDeclaration {
 
 function extractMRP(text: string): ComplianceDeclaration {
   const patterns = [
-    /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|retail\s*price)\s*[:\-\(]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:m\.?r\.?p\.?|max(?:imum)?\s*retail\s*price|maximum\s*retail\s*selling\s*price|retail\s*price)\s*[:\-\(]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i,
     /(?:rs\.?|₹|inr)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:m\.?r\.?p|inclusive|incl)/i,
     /mrp\s*[:\-\s]?\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i
   ];
@@ -282,14 +307,86 @@ function extractFSSAI(text: string): ComplianceDeclaration {
   const pattern = /(?:fssai(?:[^\d\n\r]{0,20})|lic\.?\s*(?:no\.?)?(?:[^\d\n\r]{0,10}))(\d{14})/i;
   const m = text.match(pattern);
   if (m && m[1]) {
-    return makeDeclaration(true, m[1].trim(), 'high');
+    const lic = m[1].trim();
+    const valRes = validateFSSAI(lic);
+    return makeDeclaration(
+      valRes.isValid,
+      lic,
+      'high',
+      valRes.isValid ? 'PASS' : 'FAIL',
+      valRes.status,
+      valRes.message,
+      'REQUIRED'
+    );
   }
   const standalone = /\b(100\d{11}|200\d{11}|115\d{11}|124\d{11})\b/;
   const m2 = text.match(standalone);
   if (m2 && m2[1]) {
-    return makeDeclaration(true, m2[1].trim(), 'medium');
+    const lic = m2[1].trim();
+    const valRes = validateFSSAI(lic);
+    return makeDeclaration(
+      valRes.isValid,
+      lic,
+      'medium',
+      valRes.isValid ? 'PASS' : 'FAIL',
+      valRes.status,
+      valRes.message,
+      'REQUIRED'
+    );
   }
-  return makeDeclaration(false, null, 'low');
+  return makeDeclaration(false, null, 'low', 'FAIL', 'MISSING', 'FSSAI License number is missing from the food label.', 'REQUIRED');
+}
+
+function extractSectoralLicense(text: string, category: ProductCategory): ComplianceDeclaration {
+  const spec = CATEGORY_REQUIREMENTS[category] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
+  const req = spec.regulatoryField.requirement;
+
+  if (category === 'Food & Beverage') {
+    return extractFSSAI(text);
+  }
+
+  if (req === 'NOT_APPLICABLE') {
+    return makeDeclaration(true, null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', `${spec.regulatoryField.label} is not applicable for ${category}.`, 'NOT_APPLICABLE');
+  }
+
+  let extractedVal: string | null = null;
+
+  if (category === 'Cosmetics / Personal Care') {
+    const cosPattern = /(?:mfg\.?\s*lic\.?\s*(?:no\.?)?\s*\(?cos\)?|cosmetic\s*lic\.?\s*(?:no\.?)?|form\s*32\s*(?:lic\.?\s*no\.?)?|rc\s*no\.?)\s*[:\-]?\s*([A-Za-z0-9\/\-\.]{4,35})/i;
+    const m = text.match(cosPattern);
+    if (m && m[1]) extractedVal = m[1].trim();
+  } else if (category === 'Medicines / Pharmaceuticals') {
+    const drugPattern = /(?:drug\s*lic\.?\s*(?:no\.?)?|mfg\.?\s*lic\.?\s*(?:no\.?)?|d\.?l\.?\s*no\.?|form\s*25\s*(?:no\.?)?|form\s*28\s*(?:no\.?)?)\s*[:\-]?\s*([A-Za-z0-9\/\-\.]{4,35})/i;
+    const m = text.match(drugPattern);
+    if (m && m[1]) extractedVal = m[1].trim();
+  } else if (category === 'Electrical / Electronic Products' || category === 'Toys') {
+    const bisPattern = /(?:bis\s*(?:reg\.?\s*no\.?|registration|lic\.?\s*no\.?)?|is\s*[:\s]?\s*\d{3,6}|isi\s*mark|cm\s*\/\s*l\s*-\s*\d{6,10}|r\s*-\s*\d{6,10})\s*[:\-]?\s*([A-Za-z0-9\/\-\.]{4,30})/i;
+    const m = text.match(bisPattern);
+    if (m && m[1]) extractedVal = m[1].trim();
+  } else {
+    const genPattern = /(?:reg\.?\s*no\.?|lic\.?\s*no\.?|license\s*no\.?)\s*[:\-]?\s*([A-Za-z0-9\/\-\.]{4,30})/i;
+    const m = text.match(genPattern);
+    if (m && m[1]) extractedVal = m[1].trim();
+  }
+
+  if (extractedVal) {
+    const valRes = validateCategoryLicense(category, extractedVal);
+    return makeDeclaration(
+      valRes.isValid,
+      extractedVal,
+      'high',
+      valRes.isValid ? 'PASS' : 'FAIL',
+      valRes.status,
+      valRes.message,
+      req
+    );
+  }
+
+  if (req === 'REQUIRED') {
+    return makeDeclaration(false, null, 'low', 'FAIL', 'MISSING', `${spec.regulatoryField.label} is missing.`, 'REQUIRED');
+  }
+
+  return makeDeclaration(true, null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', `${spec.regulatoryField.label} is optional/not required.`, req);
 }
 
 function extractCountryOfOrigin(text: string): ComplianceDeclaration {
@@ -341,23 +438,31 @@ export interface FormSpecificsOverride {
   manufacturer?: string;
   consumerCare?: string;
   fssaiLicense?: string;
+  regulatoryLicense?: string;
   countryOfOrigin?: string;
   unitPrice?: string;
+  category?: string;
+  barcode?: string;
 }
 
 export function analyseCompliance(
   rawText: string,
-  productNameOrOverrides?: string | FormSpecificsOverride
+  productNameOrOverrides?: string | FormSpecificsOverride,
+  categoryOverride?: string
 ): {
   declarations: ComplianceDeclarations;
   violations: Violation[];
   complianceScore: number;
   complianceStatus: ComplianceStatus;
+  category: ProductCategory;
 } {
   const text = normalizeOCRText(rawText);
 
-  const productName = typeof productNameOrOverrides === 'string' ? productNameOrOverrides : productNameOrOverrides?.productName;
   const formValues: FormSpecificsOverride | undefined = typeof productNameOrOverrides === 'object' ? productNameOrOverrides : undefined;
+  const productName = typeof productNameOrOverrides === 'string' ? productNameOrOverrides : formValues?.productName;
+
+  const resolvedCategory = normalizeCategory(categoryOverride || formValues?.category);
+  const spec = CATEGORY_REQUIREMENTS[resolvedCategory] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
 
   const declarations: ComplianceDeclarations = {
     genericName: extractGenericName(text),
@@ -368,137 +473,175 @@ export function analyseCompliance(
     consumerCare: extractConsumerCare(text),
     bestBefore: extractBestBefore(text),
     countryOfOrigin: extractCountryOfOrigin(text),
-    fssaiLicense: extractFSSAI(text),
+    fssaiLicense: resolvedCategory === 'Food & Beverage'
+      ? extractFSSAI(text)
+      : makeDeclaration(true, null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', 'FSSAI License is not applicable for this category.', 'NOT_APPLICABLE'),
     retailSalePrice: extractRetailSalePrice(text),
   };
+
+  // Extract Sectoral License (Drug, Cosmetic, BIS, etc.)
+  const sectoralDecl = extractSectoralLicense(text, resolvedCategory);
+  if (spec.regulatoryField.key && spec.regulatoryField.key !== 'fssaiLicense') {
+    declarations[spec.regulatoryField.key] = sectoralDecl;
+    declarations.regulatoryLicense = sectoralDecl;
+  }
 
   // Form value overrides: If user entered or scanned valid form values, update declaration state
   if (formValues) {
     if (formValues.productName !== undefined) {
       if (formValues.productName.trim() && formValues.productName !== 'Could not identify product') {
-        declarations.genericName = makeDeclaration(true, formValues.productName.trim(), 'high');
+        declarations.genericName = makeDeclaration(true, formValues.productName.trim(), 'high', 'PASS');
       } else {
-        declarations.genericName = makeDeclaration(false, null, 'low');
+        declarations.genericName = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.mrp !== undefined) {
       const cleanNum = formValues.mrp.replace(/[^\d.,]/g, '');
       if (cleanNum && !isNaN(parseFloat(cleanNum)) && parseFloat(cleanNum) > 0) {
-        declarations.mrp = makeDeclaration(true, `₹${cleanNum}`, 'high');
+        declarations.mrp = makeDeclaration(true, `₹${cleanNum}`, 'high', 'PASS');
       } else {
-        declarations.mrp = makeDeclaration(false, null, 'low');
+        declarations.mrp = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.netQuantity !== undefined) {
       if (formValues.netQuantity.trim() !== '') {
         const val = `${formValues.netQuantity.trim()} ${formValues.quantityUnit || ''}`.trim();
-        declarations.netQuantity = makeDeclaration(true, val, 'high');
+        declarations.netQuantity = makeDeclaration(true, val, 'high', 'PASS');
       } else {
-        declarations.netQuantity = makeDeclaration(false, null, 'low');
+        declarations.netQuantity = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.manufactureDate !== undefined) {
       if (formValues.manufactureDate.trim() !== '') {
-        declarations.manufactureDate = makeDeclaration(true, formValues.manufactureDate.trim(), 'high');
+        declarations.manufactureDate = makeDeclaration(true, formValues.manufactureDate.trim(), 'high', 'PASS');
       } else {
-        declarations.manufactureDate = makeDeclaration(false, null, 'low');
+        declarations.manufactureDate = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.expiryDate !== undefined) {
       if (formValues.expiryDate.trim() !== '') {
-        declarations.bestBefore = makeDeclaration(true, formValues.expiryDate.trim(), 'high');
+        declarations.bestBefore = makeDeclaration(true, formValues.expiryDate.trim(), 'high', 'PASS');
       } else {
-        declarations.bestBefore = makeDeclaration(false, null, 'low');
+        // Only fail bestBefore if required for this category
+        const expiryReq = spec.mandatoryDeclarations.find(d => d.key === 'bestBefore')?.requirement;
+        if (expiryReq === 'NOT_APPLICABLE') {
+          declarations.bestBefore = makeDeclaration(true, null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', 'Expiry date is not applicable for this commodity.', 'NOT_APPLICABLE');
+        } else if (expiryReq === 'OPTIONAL') {
+          declarations.bestBefore = makeDeclaration(true, null, 'high', 'PASS', 'OPTIONAL', 'Expiry date is optional.', 'OPTIONAL');
+        } else {
+          declarations.bestBefore = makeDeclaration(false, null, 'low', 'FAIL');
+        }
       }
     }
     if (formValues.manufacturer !== undefined) {
       if (formValues.manufacturer.trim() !== '') {
-        declarations.manufacturer = makeDeclaration(true, formValues.manufacturer.trim(), 'high');
+        declarations.manufacturer = makeDeclaration(true, formValues.manufacturer.trim(), 'high', 'PASS');
       } else {
-        declarations.manufacturer = makeDeclaration(false, null, 'low');
+        declarations.manufacturer = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.consumerCare !== undefined) {
       if (formValues.consumerCare.trim() !== '') {
-        declarations.consumerCare = makeDeclaration(true, formValues.consumerCare.trim(), 'high');
+        declarations.consumerCare = makeDeclaration(true, formValues.consumerCare.trim(), 'high', 'PASS');
       } else {
-        declarations.consumerCare = makeDeclaration(false, null, 'low');
+        declarations.consumerCare = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
-    if (formValues.fssaiLicense !== undefined) {
-      if (formValues.fssaiLicense.trim() !== '') {
-        declarations.fssaiLicense = makeDeclaration(true, formValues.fssaiLicense.trim(), 'high');
+
+    // Category-specific regulatory license override
+    const activeLicVal = formValues.regulatoryLicense !== undefined ? formValues.regulatoryLicense : formValues.fssaiLicense;
+
+    if (resolvedCategory === 'Food & Beverage') {
+      const fssaiInput = formValues.fssaiLicense !== undefined ? formValues.fssaiLicense : formValues.regulatoryLicense;
+      if (fssaiInput && fssaiInput.trim()) {
+        const valRes = validateFSSAI(fssaiInput);
+        declarations.fssaiLicense = makeDeclaration(
+          valRes.isValid,
+          valRes.value,
+          'high',
+          valRes.isValid ? 'PASS' : 'FAIL',
+          valRes.status,
+          valRes.message,
+          'REQUIRED'
+        );
       } else {
-        declarations.fssaiLicense = makeDeclaration(false, null, 'low');
+        declarations.fssaiLicense = makeDeclaration(false, null, 'low', 'FAIL', 'MISSING', 'FSSAI License number is missing from the food product.', 'REQUIRED');
+      }
+    } else {
+      declarations.fssaiLicense = makeDeclaration(true, null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', 'FSSAI License is not applicable for this category.', 'NOT_APPLICABLE');
+
+      if (spec.regulatoryField.key) {
+        if (activeLicVal && activeLicVal.trim()) {
+          const valRes = validateCategoryLicense(resolvedCategory, activeLicVal);
+          const decl = makeDeclaration(
+            valRes.isValid,
+            activeLicVal.trim(),
+            'high',
+            valRes.isValid ? 'PASS' : 'FAIL',
+            valRes.status,
+            valRes.message,
+            spec.regulatoryField.requirement
+          );
+          declarations[spec.regulatoryField.key] = decl;
+          declarations.regulatoryLicense = decl;
+        } else {
+          const isReq = spec.regulatoryField.requirement === 'REQUIRED';
+          const decl = makeDeclaration(
+            !isReq,
+            null,
+            'low',
+            isReq ? 'FAIL' : 'NOT_APPLICABLE',
+            isReq ? 'MISSING' : 'NOT_APPLICABLE',
+            isReq ? `${spec.regulatoryField.label} is missing.` : 'Not required.',
+            spec.regulatoryField.requirement
+          );
+          declarations[spec.regulatoryField.key] = decl;
+          declarations.regulatoryLicense = decl;
+        }
       }
     }
+
     if (formValues.countryOfOrigin !== undefined) {
       if (formValues.countryOfOrigin.trim() !== '') {
-        declarations.countryOfOrigin = makeDeclaration(true, formValues.countryOfOrigin.trim(), 'high');
+        declarations.countryOfOrigin = makeDeclaration(true, formValues.countryOfOrigin.trim(), 'high', 'PASS');
       } else {
-        declarations.countryOfOrigin = makeDeclaration(false, null, 'low');
+        declarations.countryOfOrigin = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
     if (formValues.unitPrice !== undefined) {
       if (formValues.unitPrice.trim() !== '') {
-        declarations.retailSalePrice = makeDeclaration(true, formValues.unitPrice.trim(), 'high');
+        declarations.retailSalePrice = makeDeclaration(true, formValues.unitPrice.trim(), 'high', 'PASS');
       } else {
-        declarations.retailSalePrice = makeDeclaration(false, null, 'low');
+        declarations.retailSalePrice = makeDeclaration(false, null, 'low', 'FAIL');
       }
     }
   } else if ((!declarations.genericName.present || !declarations.genericName.value) && productName && productName.trim() && productName !== 'Could not identify product') {
-    declarations.genericName = makeDeclaration(true, productName.trim(), 'high');
+    declarations.genericName = makeDeclaration(true, productName.trim(), 'high', 'PASS');
   }
 
+  // Handle Best Before requirement when non-applicable for non-perishable categories
+  const bestBeforeSpec = spec.mandatoryDeclarations.find(d => d.key === 'bestBefore');
+  if (bestBeforeSpec?.requirement === 'NOT_APPLICABLE') {
+    declarations.bestBefore = makeDeclaration(true, declarations.bestBefore?.value || null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', 'Expiry date is not mandatory for non-perishable commodity.', 'NOT_APPLICABLE');
+  }
+
+  // Build Violations List strictly from applicable rules for this category
   const violations: Violation[] = [];
 
-  // Mandatory checks (critical = must have)
-  const criticalChecks: Array<{
-    key: keyof ComplianceDeclarations;
-    label: string;
-    msg: string;
-  }> = [
-    { key: 'manufacturer', label: 'Manufacturer / Packer Details', msg: 'Name and address of manufacturer/packer/importer is missing.' },
-    { key: 'netQuantity', label: 'Net Quantity', msg: 'Net quantity (weight/volume/count) declaration is missing.' },
-    { key: 'mrp', label: 'MRP (Maximum Retail Price)', msg: 'MRP inclusive of all taxes is missing.' },
-    { key: 'manufactureDate', label: 'Date of Manufacture / Packing', msg: 'Month and year of manufacture/packing/import is missing.' },
-    { key: 'consumerCare', label: 'Consumer Care Details', msg: 'Consumer care contact (phone/email) is missing.' },
-    { key: 'genericName', label: 'Generic / Common Name', msg: 'Generic or common name of the product is missing.' },
-    { key: 'bestBefore', label: 'Best Before / Expiry Date', msg: 'Best before or expiry date is missing.' },
-  ];
+  spec.mandatoryDeclarations.forEach(item => {
+    if (item.requirement === 'NOT_APPLICABLE') return;
 
-  // Major checks
-  const majorChecks: Array<{
-    key: keyof ComplianceDeclarations;
-    label: string;
-    msg: string;
-  }> = [
-    { key: 'fssaiLicense', label: 'FSSAI License Number', msg: 'FSSAI 14-digit license number is missing (required for food products).' },
-    { key: 'retailSalePrice', label: 'Retail Sale Price Declaration', msg: 'Retail sale price per unit or "MRP inclusive of all taxes" not stated.' },
-  ];
+    const decl = declarations[item.key] || (item.key === spec.regulatoryField.key ? declarations.regulatoryLicense : undefined);
 
-  // Minor checks
-  const minorChecks: Array<{
-    key: keyof ComplianceDeclarations;
-    label: string;
-    msg: string;
-  }> = [
-    { key: 'countryOfOrigin', label: 'Country of Origin', msg: 'Country of origin is not stated (required for imported goods).' },
-  ];
-
-  criticalChecks.forEach(c => {
-    if (!declarations[c.key].present) {
-      violations.push({ field: c.key, label: c.label, message: c.msg, severity: 'critical' });
-    }
-  });
-  majorChecks.forEach(c => {
-    if (!declarations[c.key].present) {
-      violations.push({ field: c.key, label: c.label, message: c.msg, severity: 'major' });
-    }
-  });
-  minorChecks.forEach(c => {
-    if (!declarations[c.key].present) {
-      violations.push({ field: c.key, label: c.label, message: c.msg, severity: 'minor' });
+    if (item.requirement === 'REQUIRED') {
+      if (!decl || !decl.present || decl.status === 'FAIL') {
+        violations.push({
+          field: item.key,
+          label: item.label,
+          message: decl?.validationMessage || `${item.label} (${item.description}) is missing or invalid.`,
+          severity: item.severity,
+        });
+      }
     }
   });
 
@@ -533,7 +676,7 @@ export function analyseCompliance(
 
   const unreadableDeclarations = Object.keys(declarations).filter(key => {
     const dec = declarations[key as keyof ComplianceDeclarations];
-    return dec.present && dec.confidence === 'low';
+    return dec && dec.present && dec.confidence === 'low';
   });
 
   if (unreadableDeclarations.length > 0) {
@@ -545,15 +688,35 @@ export function analyseCompliance(
     });
   }
 
-  // Score: critical=12pts each (84 total), major=6pts each (12 total), minor=4pts (4 total) → 100
-  const criticalScore = criticalChecks.filter(c => declarations[c.key].present).length * 12;
-  const majorScore = majorChecks.filter(c => declarations[c.key].present).length * 6;
-  const minorScore = minorChecks.filter(c => declarations[c.key].present).length * 4;
-  const complianceScore = Math.min(100, criticalScore + majorScore + minorScore);
+  // Dynamic Compliance Score Calculation
+  const applicableMandatory = spec.mandatoryDeclarations.filter(d => d.requirement === 'REQUIRED');
+  const applicableOptional = spec.mandatoryDeclarations.filter(d => d.requirement === 'OPTIONAL');
+
+  let earnedScore = 0;
+  let totalPossible = 0;
+
+  applicableMandatory.forEach(item => {
+    const weight = item.severity === 'critical' ? 12 : 8;
+    totalPossible += weight;
+    const decl = declarations[item.key] || (item.key === spec.regulatoryField.key ? declarations.regulatoryLicense : undefined);
+    if (decl && decl.present && decl.status !== 'FAIL') {
+      earnedScore += weight;
+    }
+  });
+
+  applicableOptional.forEach(item => {
+    const weight = 3;
+    totalPossible += weight;
+    const decl = declarations[item.key];
+    if (decl && decl.present && decl.status !== 'FAIL') {
+      earnedScore += weight;
+    }
+  });
+
+  const complianceScore = totalPossible > 0 ? Math.min(100, Math.round((earnedScore / totalPossible) * 100)) : 100;
 
   // Status
   let complianceStatus: ComplianceStatus;
-
   if (complianceScore === 100) {
     complianceStatus = 'Compliant';
   } else if (complianceScore === 0) {
@@ -562,7 +725,7 @@ export function analyseCompliance(
     complianceStatus = 'Partially Compliant';
   }
 
-  return { declarations, violations, complianceScore, complianceStatus };
+  return { declarations, violations, complianceScore, complianceStatus, category: resolvedCategory };
 }
 
 // ---- Validation Template -----------------------------------
@@ -580,15 +743,17 @@ export function validateProductSpecifics(data: {
   mfgDate: string;
   expiryDate: string;
   fssaiLicense: string;
+  regulatoryLicense?: string;
+  category?: string;
 }): ValidationResult {
   if (!data.productName.trim()) {
     return { isValid: false, errorMsg: 'Product Common / Generic Name is required.' };
   }
 
-  if (data.barcode.trim()) {
-    const cleanBarcode = data.barcode.trim().replace(/\s/g, '');
-    if (!/^\d{8,14}$/.test(cleanBarcode)) {
-      return { isValid: false, errorMsg: 'Barcode must be numeric and between 8 and 14 digits.' };
+  if (data.barcode && data.barcode.trim()) {
+    const bcodeRes = validateBarcodeGTIN(data.barcode);
+    if (!bcodeRes.isValid) {
+      return { isValid: false, errorMsg: bcodeRes.message };
     }
   }
 
@@ -623,9 +788,10 @@ export function validateProductSpecifics(data: {
     }
   }
 
-  if (!data.expiryDate.trim()) {
-    return { isValid: false, errorMsg: 'Expiry / Best Before Date is required.' };
-  } else {
+  const cat = normalizeCategory(data.category);
+  const isExpiryRequired = cat === 'Food & Beverage' || cat === 'Medicines / Pharmaceuticals' || cat === 'Cosmetics / Personal Care' || cat === 'Household / Cleaning Products';
+
+  if (isExpiryRequired && data.expiryDate.trim()) {
     const exp = new Date(data.expiryDate);
     const mfg = new Date(data.mfgDate);
     if (isNaN(exp.getTime())) {
@@ -636,10 +802,13 @@ export function validateProductSpecifics(data: {
     }
   }
 
-  if (data.fssaiLicense.trim()) {
-    const cleanLic = data.fssaiLicense.trim().replace(/\s/g, '');
-    if (!/^\d{14}$/.test(cleanLic)) {
-      return { isValid: false, errorMsg: 'FSSAI License must be exactly 14 digits.' };
+  if (cat === 'Food & Beverage') {
+    const licToCheck = data.fssaiLicense?.trim() || data.regulatoryLicense?.trim();
+    if (licToCheck) {
+      const fssaiRes = validateFSSAI(licToCheck);
+      if (!fssaiRes.isValid) {
+        return { isValid: false, errorMsg: fssaiRes.message };
+      }
     }
   }
 
@@ -651,15 +820,27 @@ export function buildScanResult(
   rawText: string,
   productNameOrOverrides: string | FormSpecificsOverride,
   barcode?: string,
-  imageData?: string
+  imageData?: string,
+  categoryOverride?: string
 ): Omit<ScannedProduct, 'id'> {
-  const { declarations, violations, complianceScore, complianceStatus } = analyseCompliance(rawText, productNameOrOverrides);
+  const { declarations, violations, complianceScore, complianceStatus, category } = analyseCompliance(
+    rawText,
+    productNameOrOverrides,
+    categoryOverride
+  );
+
   const productName = typeof productNameOrOverrides === 'string'
     ? productNameOrOverrides
     : (productNameOrOverrides?.productName || 'Inspected Commodity');
+
   const mrpVal = typeof productNameOrOverrides === 'object' && productNameOrOverrides.mrp !== undefined
     ? (productNameOrOverrides.mrp.trim() ? (productNameOrOverrides.mrp.startsWith('₹') ? productNameOrOverrides.mrp : `₹${productNameOrOverrides.mrp.replace(/[^\d.,]/g, '')}`) : null)
     : (declarations.mrp?.value || null);
+
+  const regLic = typeof productNameOrOverrides === 'object'
+    ? (productNameOrOverrides.regulatoryLicense || productNameOrOverrides.fssaiLicense || null)
+    : null;
+
   return {
     productName,
     barcode,
@@ -671,6 +852,8 @@ export function buildScanResult(
     violations,
     imageData,
     mrp: mrpVal,
+    category,
+    regulatoryLicense: regLic,
   };
 }
 
@@ -739,4 +922,3 @@ export function calculateUnitSalePrice(
 
   return `₹${formattedNumber} per ${standardUnitName}`;
 }
-
