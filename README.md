@@ -34,32 +34,36 @@ Packaged commodities sold across retail stores, supermarkets, and e-commerce pla
 
 ## ✨ Key Features
 
-### 1. 🔍 Multi-Modal AI Packaging Scanner
-- **📷 Camera Scan**: Real-time camera viewfinder with alignment guide and Gemini AI extraction.
-- **📤 Image Upload**: Drag-and-drop or file upload for high-resolution packaging photos and evidence.
-- **✍️ Mandatory Specifics Grid**: Interactive, emoji/icon-rich grid to manually fill or edit declaration specifics (Net Weight, MRP, Mfg Date, Expiry, Manufacturer, FSSAI, Consumer Care, Origin, USP).
+### 1. 🔍 Multi-Modal AI Packaging Scanner & Navigation
+- **⚡ Top-Right Instant Access**: Directly launch the packaging scanner from anywhere in the app with the persistent "Add / Scan Product" header action.
+- **📷 Camera Scan**: Real-time camera viewfinder with alignment guide and Gemini AI Multimodal Vision extraction.
+- **📤 Image Upload & Drag-and-Drop**: Modern drag-and-drop dropzone supporting JPG, PNG, and WEBP files up to 25 MB with live lifecycle stepper.
+- **✍️ Interactive Declarations Grid**: Real-time form with dynamic fields tailored to specific product categories (Net Quantity, MRP, Unit Sale Price, Mfg Date, Expiry, Manufacturer, Regulatory Licenses, Origin).
 
-### 2. ⚖️ Rule-Based Compliance Engine (Rules, 2011)
-Validates all **10 mandatory declarations** required under the Legal Metrology (Packaged Commodities) Rules, 2011:
+### 2. ⚖️ Category-Aware Compliance Engine (Rules, 2011 & Sectoral Statutes)
+Dynamically validates statutory declarations tailored across **8 regulated product categories**:
+- 🥗 **Food & Beverage**: Mandatory 14-digit FSSAI license & date of packing / best before.
+- 💄 **Cosmetics & Personal Care**: Cosmetics manufacturing / import license & ingredient disclosures.
+- 💊 **Drugs & Pharmaceuticals**: Drug manufacturing / retail license, batch numbers & expiry.
+- ⚡ **Electrical / Electronic Appliances**: BIS CRS / ISI registration and safety standards.
+- 🧸 **Toys**: BIS Toy Safety License & age classification warnings.
+- 👕 **Textiles & Garments**: Fiber composition, size designation, and manufacturer details.
+- 🩺 **Medical Devices**: CDSCO Medical Device manufacturing / import license.
+- 📦 **General Packaged Commodities**: Comprehensive Legal Metrology (Packaged Commodities) Rules, 2011 compliance.
 
-| # | Declaration | Regulation |
-|---|---|---|
-| 1 | 🏷️ **Generic / Common Product Name** | Rule 6(1) |
-| 2 | ⚖️ **Net Quantity** (g, kg, ml, L, pcs) | Rule 6(2) |
-| 3 | 💰 **Maximum Retail Price (MRP)** (incl. all taxes) | Rule 6(3) |
-| 4 | 📅 **Date of Manufacture / Packing / Import** | Rule 6(4) |
-| 5 | ⌛ **Best Before / Expiry Date** (for perishables) | Rule 6(5) |
-| 6 | 🏭 **Manufacturer / Packer / Importer Name & Full Address** | Rule 6(6) |
-| 7 | 📞 **Consumer Care Details** (helpline + contact email) | Rule 6(7) |
-| 8 | 🛡️ **FSSAI 14-Digit License Number** | FSSAI Act |
-| 9 | 🌐 **Country of Origin** (mandatory for imported goods) | Rule 6(10) |
-| 10 | 💵 **Retail Sale Unit Price (USP)** (per-gram/ml) | Rule 6(3A) |
+### 3. 📄 Universal Dual Export Engine (DOCX & PDF)
+- **📝 Entire Products Registry DOCX Master Export**: Download the complete product registry dataset as a beautifully formatted, editable Microsoft Word (`.docx`) table in landscape orientation with repeated headers, comprehensive field audits, and compliance breakdowns.
+- **📑 Single-Product Word Report (.DOCX)**: Export editable individual compliance inspection reports using native Microsoft Word format.
+- **📜 Digital PDF Certificates**: Generate official compliance inspection certificates with scores, timestamps, and inspector field notes.
+- **📊 Filtered PDF Summaries**: Instant summary reports for listed inspection records.
 
-### 3. 📊 Enforcement Dashboard & Live Compliance Score
-- **Real-Time Side Box**: Displays the **Rules 2011 Checklist** with **Green Ticks (✔️ Pass)** for compliant fields and **Red Crosses (❌ Fail)** for missing or invalid declarations.
-- **Dynamic Score Counter**: Calculates compliance score in real time based on actual validated form states and extracted label data.
-- **Persistent Database Registry**: Searchable product registry with status filters (`Compliant`, `Partially Compliant`, `Non-Compliant`).
-- **Official PDF Certificates**: Instant print/export for digital inspection certificates with inspector field notes.
+### 4. 🌗 Full Dark / Light Theme System
+- Live theme switching between sleek dark mode and vibrant light mode across all cards, forms, inputs, and modals without full page reloads.
+
+### 5. 📊 Enforcement Dashboard & Barcode Verification
+- **Real-Time GTIN Validation**: Validates GTIN-8, GTIN-12, GTIN-13, and GTIN-14 check digits.
+- **Dynamic Score Counter**: Calculates compliance score in real time based on active category rules.
+- **Persistent Cloud Registry**: Searchable MongoDB Atlas database with instant category and status filters (`Compliant`, `Partially Compliant`, `Non-Compliant`).
 
 ---
 

@@ -91,4 +91,14 @@ graph TD
         *   $>$ 1kg: **4.0 mm**
     3. Evaluate OCR confidence scores on all parsed tokens. If the confidence of any verified token is `low`, the system generates a **Readability / Font Size Check** violation displaying the required minimum legal height in millimeters.
 
+### 3. Unified Dual-Format Reporting Engine (DOCX & PDF)
+*   **Service File:** [`src/services/reportService.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/reportService.ts)
+*   **Single Data Source:** Implements `buildUnifiedReportData` to ensure 100% data consistency across both PDF certificates and Microsoft Word documents.
+*   **Single-Product DOCX Export:** Generates editable `.docx` compliance reports (`exportComplianceReportDOCX`) with audit breakdown, scoring tables, and violation logs.
+*   **Products Registry Master Dataset Export:** Implements `exportProductsRegistryDOCX` to export the full inspection repository as an editable Word document in landscape format with repeated headers (`tableHeader: true`), alternating shaded rows, and complete metadata.
+
+### 4. Barcode Checksum Validation Engine
+*   **Service File:** [`src/services/categoryRequirements.ts`](file:///c:/Users/asgal/Downloads/Smart-Bite-main/Smart-Bite-main/src/services/categoryRequirements.ts)
+*   Validates GS1-compliant GTIN-8, GTIN-12 (UPC-A), GTIN-13 (EAN-13), and GTIN-14 barcodes via Modulo-10 checksum calculation in real time.
+
 ---

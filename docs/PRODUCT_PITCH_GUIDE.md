@@ -39,15 +39,18 @@ Label Lens is an AI-powered instant-audit tool for Legal Metrology compliance. U
 ## ⚙️ Key Product Features
 
 1.  **AI OCR Scanning:** Parses manufacturer metadata, date configurations, numbers, and barcodes.
-2.  **Scoring & Status Categories:**
+2.  **Category-Aware Regulatory Validation:** Tailors statutory requirements across Food & Beverage, Cosmetics, Pharmaceuticals, Electricals, Toys, Textiles, Medical Devices, and General Packaged Commodities.
+3.  **Scoring & Status Categories:**
     *   **Compliant (100%):** All critical, major, and minor declarations are present and valid.
     *   **Partially Compliant (1% - 99%):** At least one declaration is present, but others are missing, improperly formatted, or expired.
     *   **Non-Compliant (0%):** No declarations detected.
-3.  **Legal Metrology Rule 13 Compliance Check:** Calculates minimum legal font height in millimeters based on package weight.
-4.  **Instant Compliance Certificates:** Exports high-quality, signature-ready PDF violation reports.
-5.  **Repository Logs:** Maintains inspection history synchronized to a cloud database.
-6.  **Sleek GPU-Accelerated UI Transitions:** Modern, fluid animations with smooth slide-up effects when switching views, creating a premium software experience for inspectors in the field.
-7.  **Resilient OCR Date Parsing:** Handles common real-world package text defects, including typos (like "best bfore") and varying formats (like 2-digit years or MM/YYYY), ensuring dates are parsed and mapped accurately.
+4.  **Dual PDF & Editable Word (.DOCX) Exports:**
+    *   *Single-Product Certificates:* Instant PDF and editable Microsoft Word reports.
+    *   *Entire Products Master Dataset:* Export complete repository inspections as an editable landscape `.docx` table with repeated headers and comprehensive audit breakdowns.
+5.  **Legal Metrology Rule 13 Compliance Check:** Calculates minimum legal font height in millimeters based on package weight.
+6.  **Repository Logs:** Maintains inspection history synchronized to a cloud database with instant category and status filters.
+7.  **Theme-Aware Interface:** High-contrast dark mode and crisp light mode for flexible indoor and outdoor field inspections.
+8.  **Resilient OCR Date & Barcode Parsing:** Handles common real-world package text defects and verifies GTIN check-digits in real time.
 
 ---
 
