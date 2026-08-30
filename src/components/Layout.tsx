@@ -72,13 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                     <div className="flex items-center gap-2">
                         {/* Add / Scan Product Button */}
                         <button
-                            onClick={() => {
-                                if (onOpenAddModal) {
-                                    onOpenAddModal();
-                                } else {
-                                    onNavigate('scan');
-                                }
-                            }}
+                            onClick={() => onNavigate('scan')}
                             className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-900/90 dark:bg-gray-800/90 hover:bg-gray-800 dark:hover:bg-gray-700 text-gray-100 dark:text-gray-100 border border-gray-700/80 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-400/60 rounded-full text-xs font-bold shadow-sm transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                         >
                             <Plus size={15} className="text-blue-500 dark:text-blue-400" />

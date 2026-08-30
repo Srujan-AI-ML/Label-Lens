@@ -17,9 +17,9 @@ import {
   WidthType,
   AlignmentType,
   HeadingLevel,
-  BorderStyle,
   ShadingType,
   convertInchesToTwip,
+  PageOrientation,
 } from 'docx';
 import type { ScannedProduct } from '../types';
 import {
@@ -680,6 +680,253 @@ export async function exportComplianceReportDOCX(product: ScannedProduct): Promi
   const blob = await Packer.toBlob(doc);
   const safeName = data.productName.replace(/[^a-zA-Z0-9]/g, '_');
   const filename = `Label_Lens_${safeName}_Editable_Report.docx`;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ------------------------------------------------------------
+// Microsoft Word (.DOCX) Products Registry Dataset Export
+// Exports the entire products section as an editable Word document
+// ------------------------------------------------------------
+
+export async function exportProductsRegistryDOCX(
+  productsList: ScannedProduct[],
+  isFiltered: boolean = false
+): Promise<void> {
+  const generatedDateStr = new Date().toLocaleString();
+  const totalCount = productsList.length;
+  const compliantCount = productsList.filter(p => p.complianceStatus === 'Compliant').length;
+  const partiallyCompliantCount = productsList.filter(p => p.complianceStatus === 'Partially Compliant').length;
+  const nonCompliantCount = productsList.filter(p => p.complianceStatus === 'Non-Compliant' || p.complianceStatus === 'Pending').length;
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: {
+              orientation: PageOrientation.LANDSCAPE,
+            },
+            margin: {
+              top: convertInchesToTwip(0.5),
+              bottom: convertInchesToTwip(0.5),
+              left: convertInchesToTwip(0.5),
+              right: convertInchesToTwip(0.5),
+            },
+          },
+        },
+        children: [
+          // Header Title
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({
+                text: 'LABEL LENS',
+                bold: true,
+                size: 32,
+                color: '1D4ED8',
+              }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 100 },
+            children: [
+              new TextRun({
+                text: isFiltered
+                  ? 'PRODUCT INSPECTIONS REGISTRY SUMMARY (FILTERED VIEW)'
+                  : 'PRODUCT INSPECTIONS & COMPLIANCE REGISTRY MASTER DATASET',
+                bold: true,
+                size: 18,
+                color: '374151',
+              }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 180 },
+            children: [
+              new TextRun({
+                text: `Generated on: ${generatedDateStr}   |   Total Records: ${totalCount} (Compliant: ${compliantCount}, Partially Compliant: ${partiallyCompliantCount}, Non-Compliant: ${nonCompliantCount})`,
+                italics: true,
+                size: 15,
+                color: '6B7280',
+              }),
+            ],
+          }),
+
+          // Products Registry Table
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              // Header row
+              new TableRow({
+                tableHeader: true,
+                children: [
+                  new TableCell({
+                    width: { size: 4, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '#', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 18, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'Product Details & GTIN', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 14, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'Category', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 12, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'MRP & Net Qty', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 12, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'Mfg / Expiry Date', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 16, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'Manufacturer & License', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 10, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Score & Status', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                  new TableCell({
+                    width: { size: 14, type: WidthType.PERCENTAGE },
+                    shading: { type: ShadingType.CLEAR, fill: '1D4ED8' },
+                    children: [new Paragraph({ children: [new TextRun({ text: 'Audit Deficiencies / Notes', bold: true, color: 'FFFFFF', size: 15 })] })],
+                  }),
+                ],
+              }),
+              // Data rows
+              ...productsList.map((p, idx) => {
+                const catText = normalizeCategory(p.category);
+                const decs = p.declarations || ({} as any);
+                const mrpVal = p.mrp || decs.mrp?.value || 'N/A';
+                const qtyVal = decs.netQuantity?.value || 'N/A';
+                const mfgVal = decs.manufactureDate?.value || 'N/A';
+                const expVal = decs.bestBefore?.value || 'N/A';
+                const mfrVal = decs.manufacturer?.value || 'N/A';
+                const licVal = decs.fssaiLicense?.value || p.regulatoryLicense || 'N/A';
+                const statusColor = p.complianceStatus === 'Compliant' ? '059669' : p.complianceStatus === 'Partially Compliant' ? 'D97706' : 'DC2626';
+                const isEven = idx % 2 === 0;
+                const rowShading = isEven ? 'FFFFFF' : 'F9FAFB';
+
+                const violationsText = p.violations && p.violations.length > 0
+                  ? p.violations.map((v, vIdx) => `${vIdx + 1}. [${v.severity.toUpperCase()}] ${v.label}: ${v.message}`).join('\n')
+                  : 'Complies with mandatory declarations';
+
+                return new TableRow({
+                  children: [
+                    // Index
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${idx + 1}`, size: 14 })] })],
+                    }),
+                    // Product Details & GTIN
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: p.productName || 'Unnamed Product', bold: true, size: 15, color: '111827' })] }),
+                        new Paragraph({ children: [new TextRun({ text: `Barcode: ${p.barcode || 'N/A'}`, size: 13, color: '4B5563', font: 'Consolas' })] }),
+                        ...(p.notes ? [new Paragraph({ children: [new TextRun({ text: `Note: ${p.notes}`, italics: true, size: 12, color: '6B7280' })] })] : []),
+                      ],
+                    }),
+                    // Category
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [new Paragraph({ children: [new TextRun({ text: catText, bold: true, color: '1D4ED8', size: 14 })] })],
+                    }),
+                    // MRP & Net Qty
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: `MRP: ${mrpVal}`, bold: true, size: 14, color: '059669' })] }),
+                        new Paragraph({ children: [new TextRun({ text: `Qty: ${qtyVal}`, size: 13, color: '374151' })] }),
+                      ],
+                    }),
+                    // Dates
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: `Mfg: ${mfgVal}`, size: 13, color: '374151' })] }),
+                        new Paragraph({ children: [new TextRun({ text: `Exp: ${expVal}`, size: 13, color: '374151' })] }),
+                      ],
+                    }),
+                    // Manufacturer & License
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: `Mfr: ${mfrVal}`, size: 13, color: '1F2937' })] }),
+                        new Paragraph({ children: [new TextRun({ text: `Lic: ${licVal}`, size: 12, color: '4B5563' })] }),
+                      ],
+                    }),
+                    // Score & Status
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${p.complianceScore}%`, bold: true, size: 16, color: '111827' })] }),
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: p.complianceStatus, bold: true, size: 13, color: statusColor })] }),
+                      ],
+                    }),
+                    // Violations & Deficiencies
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, fill: rowShading },
+                      children: [
+                        new Paragraph({
+                          children: [
+                            new TextRun({
+                              text: violationsText,
+                              size: 13,
+                              color: p.violations && p.violations.length > 0 ? 'B91C1C' : '059669',
+                              italics: !(p.violations && p.violations.length > 0),
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                  ],
+                });
+              }),
+            ],
+          }),
+
+          // Disclaimer & Attribution Footer
+          new Paragraph({
+            spacing: { before: 200 },
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({
+                text: 'Generated by Label Lens Verification System — Legal Metrology & Sectoral Compliance Dataset Export. Fully editable Microsoft Word document.',
+                size: 13,
+                color: '9CA3AF',
+                italics: true,
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `Label_Lens_Products_Registry_${dateStr}.docx`;
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

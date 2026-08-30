@@ -1121,7 +1121,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
 
                         {/* Right Column: Live Rules, 2011 Checklist Side Box */}
                         <div className="lg:col-span-1 space-y-4">
-                            <div className="p-5 bg-gray-50 dark:bg-gray-850 rounded-3xl border border-gray-200 dark:border-gray-700/70 space-y-3.5">
+                            <div className="p-5 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700/70 space-y-3.5">
                                 <div className="flex items-center justify-between pb-2.5 border-b border-gray-200 dark:border-gray-700">
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">

@@ -6,7 +6,7 @@ import type { PageType } from '../App';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ALL_CATEGORIES, normalizeCategory } from '../services/categoryRequirements';
-import { exportComplianceReportDOCX } from '../services/reportService';
+import { exportComplianceReportDOCX, exportProductsRegistryDOCX } from '../services/reportService';
 
 interface RepositoryProps {
     onNavigate: (page: PageType) => void;
@@ -133,6 +133,15 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
         }
     };
 
+    const handleDownloadDocxSummary = async () => {
+        try {
+            await exportProductsRegistryDOCX(filteredProducts, filteredProducts.length !== products.length);
+        } catch (err: any) {
+            console.error('Error generating DOCX summary:', err);
+            alert('Failed to generate DOCX summary: ' + (err.message || 'Unknown error'));
+        }
+    };
+
     // Filter logic
     const filteredProducts = products.filter(p => {
         const cat = normalizeCategory(p.category);
@@ -209,13 +218,22 @@ export const Repository: React.FC<RepositoryProps> = ({ onNavigate, onSelectProd
                     </div>
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-700/50">
                     <button
                         onClick={handleDownloadSummary}
-                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-xl transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-xl transition-colors cursor-pointer border border-blue-200/60 dark:border-blue-900/40"
+                        title="Download summary of products as PDF"
                     >
                         <FileDown size={15} />
-                        Export PDF Summary of Listed Items ({filteredProducts.length})
+                        Download PDF ({filteredProducts.length})
+                    </button>
+                    <button
+                        onClick={handleDownloadDocxSummary}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors cursor-pointer border border-indigo-200/60 dark:border-indigo-900/40"
+                        title="Download entire products dataset as editable Microsoft Word DOCX"
+                    >
+                        <FileDown size={15} />
+                        Download Editable DOCX ({filteredProducts.length})
                     </button>
                 </div>
             </div>

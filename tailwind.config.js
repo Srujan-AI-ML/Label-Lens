@@ -8,6 +8,9 @@ export default {
   theme: {
     extend: {
       colors: {
+        gray: {
+          850: '#1e293b',
+        },
         // Custom palette based on prompt
         primary: {
            DEFAULT: '#059669', // emerald-600

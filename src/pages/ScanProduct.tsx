@@ -720,7 +720,7 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                         className={`relative rounded-3xl p-6 transition-all duration-300 border ${
                             isDraggingOver 
                                 ? 'bg-blue-900/20 border-blue-500 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500'
-                                : 'bg-white dark:bg-gray-850/90 border-gray-100 dark:border-gray-700/60 shadow-sm'
+                                : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm'
                         }`}
                     >
                         <input
