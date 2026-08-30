@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from '../components/CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage as _extractTextFromImage, scanProductImageWithGemini, saveUserGeminiApiKey } from '../services/visionService';
@@ -16,7 +16,7 @@ import {
 import { 
     Camera, Upload, ArrowLeft, Sparkles, Tag, Scale, DollarSign, 
     Factory, Phone, Calendar, Clock, Shield, Globe, Layers, Save, RotateCcw,
-    ScanLine, X, Key, CheckCircle, AlertCircle, HelpCircle
+    ScanLine, X, Key, CheckCircle, AlertCircle, HelpCircle, FileText, CheckCircle2, Loader2, RefreshCw, Image as ImageIcon
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
 import type { PageType } from '../App';
@@ -73,6 +73,8 @@ function formatToISODate(dateStr: string): string {
     return '';
 }
 
+export type ScanStage = 'idle' | 'uploading' | 'analyzing' | 'checking' | 'generating' | 'complete' | 'error';
+
 interface ScanProductProps {
     onNavigate: (page: PageType) => void;
     onSelectProduct: (product: ScannedProduct) => void;
@@ -82,8 +84,14 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     const { addScanResult } = useProduct();
     const [showCamera, setShowCamera] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
+    const [scanStage, setScanStage] = useState<ScanStage>('idle');
     const [scanStatus, setScanStatus] = useState('');
+    const [scanErrorMsg, setScanErrorMsg] = useState<string | null>(null);
     
+    // Drag and Drop state
+    const [isDraggingOver, setIsDraggingOver] = useState(false);
+    const [selectedFileInfo, setSelectedFileInfo] = useState<{ name: string; size: string } | null>(null);
+
     // Structured declaration fields
     const [productName, setProductName] = useState('');
     const [barcode, setBarcode] = useState('');
@@ -104,6 +112,24 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Prevent default browser file opening when dragging anywhere in window
+    useEffect(() => {
+        const handleWindowDragOver = (e: DragEvent) => {
+            e.preventDefault();
+        };
+        const handleWindowDrop = (e: DragEvent) => {
+            e.preventDefault();
+        };
+
+        window.addEventListener('dragover', handleWindowDragOver);
+        window.addEventListener('drop', handleWindowDrop);
+
+        return () => {
+            window.removeEventListener('dragover', handleWindowDragOver);
+            window.removeEventListener('drop', handleWindowDrop);
+        };
+    }, []);
 
     const currentCategorySpec = CATEGORY_REQUIREMENTS[category] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
 
@@ -137,7 +163,6 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
 
     const handleCategoryChange = (newCat: ProductCategory) => {
         setCategory(newCat);
-        // If switching to Food & Beverage, sync fssaiLicense and regulatoryLicense
         if (newCat === 'Food & Beverage') {
             if (!fssaiLicense && regulatoryLicense) {
                 setFssaiLicense(regulatoryLicense);
@@ -206,12 +231,21 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     const handleCameraCapture = async (imageSrc: string) => {
         setShowCamera(false);
         setImagePreview(imageSrc);
+        setSelectedFileInfo({ name: 'Camera_Snapshot.jpg', size: 'Captured Photo' });
         await processLabelImage(imageSrc);
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const processFileObject = (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            alert('Please select or drop a valid image file (JPG, PNG, WEBP, etc.)');
+            return;
+        }
+
+        const sizeFormatted = file.size < 1024 * 1024 
+            ? `${(file.size / 1024).toFixed(1)} KB`
+            : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+
+        setSelectedFileInfo({ name: file.name, size: sizeFormatted });
 
         const reader = new FileReader();
         reader.onload = async () => {
@@ -221,6 +255,43 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             }
         };
         reader.readAsDataURL(file);
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        processFileObject(file);
+    };
+
+    // Drag-and-drop event handlers
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(true);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDraggingOver) setIsDraggingOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDraggingOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            processFileObject(file);
+        }
     };
 
     const autoPopulateFromText = (extractedText: string, currentName: string = '', currentBarcode: string = '') => {
@@ -312,22 +383,28 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setUnitPrice('');
         setNotes('');
         setRawText('');
+        setScanErrorMsg(null);
 
         setIsScanning(true);
-        setScanStatus('Analyzing image and reading packaging declarations via Google Gemini...');
-        const base64Data = imageSrc.split(',')[1] || imageSrc;
+        // Stage 1: Uploading
+        setScanStage('uploading');
+        setScanStatus('Uploading packaging image and preparing high-resolution payload...');
 
+        const base64Data = imageSrc.split(',')[1] || imageSrc;
         let detectedBarcode = '';
         let detectedName = '';
 
         try {
+            // Stage 2: Analyzing label (Gemini AI Vision Analysis & Barcode reading)
+            setScanStage('analyzing');
+            setScanStatus('Running Google Gemini AI Multimodal Vision Analysis...');
+
             // Step 1: Detect Barcode
             try {
                 const bcode = await detectBarcode(base64Data);
                 if (bcode) {
                     detectedBarcode = bcode;
                     setBarcode(bcode);
-                    setScanStatus(`Barcode detected: ${bcode}. Checking product registry...`);
                     const info = await lookupProduct(bcode);
                     if (info && info.name) {
                         detectedName = info.name;
@@ -339,13 +416,16 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             }
 
             // Step 2: Google Gemini AI Multimodal Vision Analysis (Preserved exactly)
-            setScanStatus('Running Google Gemini AI Multimodal Vision Analysis...');
             const scanResult = await scanProductImageWithGemini(imageSrc);
             const { text, product } = scanResult;
 
             if (text) {
                 setRawText(text);
             }
+
+            // Stage 3: Checking results (Validating extracted declarations & category classification)
+            setScanStage('checking');
+            setScanStatus('Classifying product category and verifying regulatory license syntax...');
 
             // Step 3: Intelligent Category Detection based on extracted text & product identity
             const catDetection = detectProductCategory(
@@ -420,7 +500,17 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 autoPopulateFromText(text, detectedName, detectedBarcode);
             }
 
-            setScanStatus(`✅ Scanned & classified as [${catDetection.category}]. Review and edit fields below.`);
+            // Stage 4: Generating result
+            setScanStage('generating');
+            setScanStatus('Synthesizing Legal Metrology compliance matrix...');
+
+            // Transition to Complete state smoothly
+            setTimeout(() => {
+                setScanStage('complete');
+                setScanStatus(`✅ Analysis complete: Classified as [${catDetection.category}]. Review details below.`);
+                setIsScanning(false);
+            }, 400);
+
             console.log('--- [PIPELINE] FORM STATE UPDATED ---');
             console.log('--- [PIPELINE] SCAN COMPLETE ---');
 
@@ -429,8 +519,9 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             if (detectedName) {
                 setProductName(detectedName);
             }
-            setScanStatus(`⚠️ Scanning notice: ${err.message || 'Image loaded'}. You can fill specifics in the grid below.`);
-        } finally {
+            setScanStage('error');
+            setScanErrorMsg(err.message || 'Image analysis encountered an error. You can enter or edit specifics manually below.');
+            setScanStatus(`⚠️ Scanning notice: ${err.message || 'Image loaded'}`);
             setIsScanning(false);
         }
     };
@@ -511,7 +602,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setNotes('');
         setRawText('');
         setImagePreview(null);
+        setSelectedFileInfo(null);
+        setScanStage('idle');
         setScanStatus('');
+        setScanErrorMsg(null);
     };
 
     // Declarations checklist icons tailored to category
@@ -547,6 +641,33 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
             };
         });
     }, [currentCategorySpec, liveAnalysis]);
+
+    const processingSteps = [
+        { id: 'uploading', label: 'Uploading', desc: 'Preparing image payload' },
+        { id: 'analyzing', label: 'Analyzing label', desc: 'Gemini AI Vision reading package text' },
+        { id: 'checking', label: 'Checking results', desc: 'Validating GTIN & category regulations' },
+        { id: 'generating', label: 'Generating result', desc: 'Synthesizing compliance inspection' }
+    ];
+
+    const getStepStatus = (stepId: string): 'pending' | 'active' | 'completed' | 'error' => {
+        if (scanStage === 'error') {
+            const stepOrder = ['uploading', 'analyzing', 'checking', 'generating'];
+            const errorIdx = stepOrder.indexOf('analyzing');
+            const thisIdx = stepOrder.indexOf(stepId);
+            if (thisIdx === errorIdx) return 'error';
+            if (thisIdx < errorIdx) return 'completed';
+            return 'pending';
+        }
+
+        const order = ['idle', 'uploading', 'analyzing', 'checking', 'generating', 'complete'];
+        const currentIdx = order.indexOf(scanStage);
+        const thisIdx = order.indexOf(stepId);
+
+        if (scanStage === 'complete') return 'completed';
+        if (currentIdx === thisIdx) return 'active';
+        if (currentIdx > thisIdx) return 'completed';
+        return 'pending';
+    };
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -590,87 +711,210 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 {/* Left Column (2/3 width): Specifics Grid Form or Image Upload */}
                 <div className="lg:col-span-2 space-y-6">
 
-                    {/* Image / Camera Upload Bar */}
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>📸</span> Attach Packaging Photo / Camera Scan
-                                </h2>
-                                <p className="text-xs text-gray-400 dark:text-gray-500">
-                                    Upload or snap label photo for automatic character extraction and category detection
+                    {/* Modern SaaS Drag & Drop Image Upload Card */}
+                    <div 
+                        onDragEnter={handleDragEnter}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        className={`relative rounded-3xl p-6 transition-all duration-300 border ${
+                            isDraggingOver 
+                                ? 'bg-blue-900/20 border-blue-500 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500'
+                                : 'bg-white dark:bg-gray-850/90 border-gray-100 dark:border-gray-700/60 shadow-sm'
+                        }`}
+                    >
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                        />
+
+                        {/* If No Image is Selected and not Scanning: Modern Drop Zone Empty State */}
+                        {!imagePreview && !isScanning && (
+                            <div className="flex flex-col items-center justify-center text-center py-6 px-4">
+                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all duration-300 ${
+                                    isDraggingOver
+                                        ? 'bg-blue-600 text-white scale-110 shadow-lg shadow-blue-600/30'
+                                        : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40'
+                                }`}>
+                                    {isDraggingOver ? <Sparkles size={30} className="animate-pulse" /> : <Upload size={28} />}
+                                </div>
+
+                                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                                    {isDraggingOver ? 'Drop image to start scanning' : 'Scan a Product Label'}
+                                </h3>
+                                
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-md">
+                                    {isDraggingOver 
+                                        ? 'Release your file here to run Google Gemini Multimodal Vision analysis'
+                                        : 'Drag & drop your product image here, or browse files from your device to automatically detect declarations'
+                                    }
                                 </p>
-                            </div>
-                            {imagePreview && (
-                                <button
-                                    onClick={() => setImagePreview(null)}
-                                    className="text-xs text-rose-500 hover:text-rose-700 font-bold cursor-pointer"
-                                >
-                                    ✕ Remove Photo
-                                </button>
-                            )}
-                        </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <button
-                                type="button"
-                                onClick={() => setShowCamera(true)}
-                                disabled={isScanning}
-                                className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-bold rounded-2xl shadow-md transition-all cursor-pointer text-xs sm:text-sm"
-                            >
-                                <Camera size={18} />
-                                Capture with Camera
-                            </button>
+                                {/* Action Buttons */}
+                                <div className="flex flex-wrap items-center justify-center gap-3 mt-5">
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 transition-all cursor-pointer hover:scale-[1.02]"
+                                    >
+                                        <Upload size={15} />
+                                        Browse Image
+                                    </button>
 
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isScanning}
-                                className="flex items-center justify-center gap-2 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:bg-gray-300 text-gray-800 dark:text-white font-bold rounded-2xl transition-all cursor-pointer text-xs sm:text-sm"
-                            >
-                                <Upload size={18} />
-                                Upload Image File
-                            </button>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                ref={fileInputRef}
-                                onChange={handleFileUpload}
-                                className="hidden"
-                            />
-                        </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCamera(true)}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold rounded-xl text-xs border border-gray-200 dark:border-gray-700 transition-all cursor-pointer"
+                                    >
+                                        <Camera size={15} />
+                                        Use Camera
+                                    </button>
+                                </div>
 
-                        {imagePreview && (
-                            <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black flex items-center justify-center">
-                                <img src={imagePreview} alt="Packaging Preview" className="h-full object-contain" />
+                                <div className="flex items-center gap-2 mt-4 text-[11px] text-gray-400 dark:text-gray-500">
+                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 font-mono">JPG</span>
+                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 font-mono">PNG</span>
+                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 font-mono">WEBP</span>
+                                    <span>• up to 25 MB</span>
+                                </div>
                             </div>
                         )}
 
-                        {scanStatus && (
-                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 flex-1">
-                                    <Sparkles size={15} className="shrink-0" />
+                        {/* Image Preview & Active File Details */}
+                        {imagePreview && (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-gray-700/60">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-950 rounded-lg text-blue-600 dark:text-blue-400 shrink-0">
+                                            <ImageIcon size={16} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                                {selectedFileInfo?.name || 'Attached Packaging Photo'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400">
+                                                {selectedFileInfo?.size || 'Image Ready'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isScanning}
+                                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                                        >
+                                            Change
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={resetScan}
+                                            disabled={isScanning}
+                                            className="px-3 py-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                    <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black flex items-center justify-center shadow-inner">
+                                        <img src={imagePreview} alt="Packaging Preview" className="h-full w-full object-contain" />
+                                    </div>
+
+                                    {/* Multi-Step Real Processing Stepper */}
+                                    <div className="p-4 bg-gray-50/70 dark:bg-gray-900/60 rounded-2xl border border-gray-200/60 dark:border-gray-800 space-y-3">
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                                            Inspection Lifecycle
+                                        </p>
+
+                                        <div className="space-y-2.5">
+                                            {processingSteps.map((step, idx) => {
+                                                const status = getStepStatus(step.id);
+
+                                                return (
+                                                    <div key={step.id} className="flex items-start gap-3">
+                                                        {/* Status Indicator Icon */}
+                                                        <div className="pt-0.5 shrink-0">
+                                                            {status === 'completed' ? (
+                                                                <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                                                                    <CheckCircle2 size={13} />
+                                                                </div>
+                                                            ) : status === 'active' ? (
+                                                                <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center animate-spin">
+                                                                    <Loader2 size={13} />
+                                                                </div>
+                                                            ) : status === 'error' ? (
+                                                                <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center">
+                                                                    <AlertCircle size={13} />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[10px] text-gray-400 font-bold">
+                                                                    {idx + 1}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Step Text Info */}
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className={`text-xs font-bold ${
+                                                                status === 'completed'
+                                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                                    : status === 'active'
+                                                                    ? 'text-blue-600 dark:text-blue-400'
+                                                                    : status === 'error'
+                                                                    ? 'text-rose-600 dark:text-rose-400'
+                                                                    : 'text-gray-400 dark:text-gray-500'
+                                                            }`}>
+                                                                {step.label}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                                                                {step.desc}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Error & API Alert Banner */}
+                        {scanErrorMsg && (
+                            <div className="mt-4 p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-2xl text-xs text-rose-700 dark:text-rose-300 flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-2 min-w-0">
+                                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <strong className="block font-bold">Scan Notice:</strong>
+                                        <span>{scanErrorMsg}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (imagePreview) processLabelImage(imagePreview);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-xs transition-colors shrink-0 cursor-pointer"
+                                >
+                                    <RefreshCw size={12} />
+                                    Retry
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Success Status Banner */}
+                        {scanStage === 'complete' && scanStatus && (
+                            <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
                                     <span>{scanStatus}</span>
                                 </div>
-                                {(scanStatus.includes('failed') || scanStatus.includes('notice') || scanStatus.includes('configured')) && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const key = prompt('Please enter your Google Gemini API Key (starts with AIza...):');
-                                            if (key && key.trim()) {
-                                                saveUserGeminiApiKey(key.trim());
-                                                setScanStatus('✅ API Key saved! Re-scanning packaging image...');
-                                                if (imagePreview) {
-                                                    processLabelImage(imagePreview);
-                                                }
-                                            }
-                                        }}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
-                                    >
-                                        <Key size={12} />
-                                        Set Gemini API Key
-                                    </button>
-                                )}
                             </div>
                         )}
                     </div>

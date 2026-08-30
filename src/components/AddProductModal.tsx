@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { CameraModal } from './CameraModal';
 import { detectBarcode, lookupProduct, extractTextFromImage as _extractTextFromImage, scanProductImageWithGemini } from '../services/visionService';
@@ -14,9 +14,11 @@ import {
     type ProductCategory,
 } from '../services/categoryRequirements';
 import {
-    X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine, CheckCircle, AlertCircle
+    X, Camera, Upload, Sparkles, Save, RotateCcw, ArrowRight, ScanLine, CheckCircle, AlertCircle,
+    CheckCircle2, Loader2, RefreshCw, Image as ImageIcon
 } from 'lucide-react';
 import type { ScannedProduct, ComplianceDeclarations } from '../types';
+import type { ScanStage } from '../pages/ScanProduct';
 
 interface AddProductModalProps {
     isOpen: boolean;
@@ -37,7 +39,13 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     );
     const [showCamera, setShowCamera] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [scanStage, setScanStage] = useState<ScanStage>('idle');
     const [statusMsg, setStatusMsg] = useState('');
+    const [scanErrorMsg, setScanErrorMsg] = useState<string | null>(null);
+
+    // Drag-and-drop state
+    const [isDraggingOver, setIsDraggingOver] = useState(false);
+    const [selectedFileInfo, setSelectedFileInfo] = useState<{ name: string; size: string } | null>(null);
 
     // Specific declaration fields
     const [productName, setProductName] = useState('');
@@ -59,6 +67,24 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Prevent default browser navigation when dropping anywhere in window
+    useEffect(() => {
+        const handleWindowDragOver = (e: DragEvent) => {
+            e.preventDefault();
+        };
+        const handleWindowDrop = (e: DragEvent) => {
+            e.preventDefault();
+        };
+
+        window.addEventListener('dragover', handleWindowDragOver);
+        window.addEventListener('drop', handleWindowDrop);
+
+        return () => {
+            window.removeEventListener('dragover', handleWindowDragOver);
+            window.removeEventListener('drop', handleWindowDrop);
+        };
+    }, []);
 
     const currentCategorySpec = CATEGORY_REQUIREMENTS[category] || CATEGORY_REQUIREMENTS['General Packaged Commodities'];
 
@@ -162,12 +188,21 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
     const handleCameraCapture = async (imageSrc: string) => {
         setShowCamera(false);
         setImagePreview(imageSrc);
+        setSelectedFileInfo({ name: 'Camera_Snapshot.jpg', size: 'Captured Photo' });
         await processUploadedImage(imageSrc);
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const processFileObject = (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            alert('Please select or drop a valid image file (JPG, PNG, WEBP, etc.)');
+            return;
+        }
+
+        const sizeFormatted = file.size < 1024 * 1024 
+            ? `${(file.size / 1024).toFixed(1)} KB`
+            : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+
+        setSelectedFileInfo({ name: file.name, size: sizeFormatted });
 
         const reader = new FileReader();
         reader.onload = async () => {
@@ -177,6 +212,43 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             }
         };
         reader.readAsDataURL(file);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        processFileObject(file);
+    };
+
+    // Drag and drop event handlers
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(true);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDraggingOver) setIsDraggingOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDraggingOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            processFileObject(file);
+        }
     };
 
     const formatToISODate = (dateStr: string): string => {
@@ -303,22 +375,28 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         setUnitPrice('');
         setNotes('');
         setRawText('');
+        setScanErrorMsg(null);
 
         setIsProcessing(true);
-        setStatusMsg('Scanning image and reading packaging declarations via Google Gemini...');
-        const base64Data = imageSrc.split(',')[1] || imageSrc;
+        // Stage 1: Uploading
+        setScanStage('uploading');
+        setStatusMsg('Uploading packaging image and preparing payload...');
 
+        const base64Data = imageSrc.split(',')[1] || imageSrc;
         let detectedBarcode = '';
         let detectedName = '';
 
         try {
+            // Stage 2: Analyzing label (Gemini AI Multimodal Vision)
+            setScanStage('analyzing');
+            setStatusMsg('Extracting packaging declarations with Google Gemini AI...');
+
             // Step 1: Barcode Detection
             try {
                 const bcode = await detectBarcode(base64Data);
                 if (bcode) {
                     detectedBarcode = bcode;
                     setBarcode(bcode);
-                    setStatusMsg(`Barcode detected: ${bcode}. Querying product registry...`);
                     const info = await lookupProduct(bcode);
                     if (info && info.name) {
                         detectedName = info.name;
@@ -330,13 +408,16 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             }
 
             // Step 2: Google Gemini AI Multimodal Vision Analysis (Preserved)
-            setStatusMsg('Extracting packaging declarations with Google Gemini AI...');
             const scanResult = await scanProductImageWithGemini(imageSrc);
             const { text, product } = scanResult;
 
             if (text) {
                 setRawText(text);
             }
+
+            // Stage 3: Checking results (Category Classification & License Validation)
+            setScanStage('checking');
+            setStatusMsg('Classifying category and validating regulatory specifics...');
 
             // Step 3: Category Detection
             const catDetection = detectProductCategory(
@@ -410,15 +491,24 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                 autoPopulateFromText(text, detectedName, detectedBarcode);
             }
 
-            setStatusMsg(`✅ Declarations extracted & classified as [${catDetection.category}]! Review specifics in grid.`);
+            // Stage 4: Generating result
+            setScanStage('generating');
+            setStatusMsg('Synthesizing Legal Metrology compliance matrix...');
+
+            setTimeout(() => {
+                setScanStage('complete');
+                setStatusMsg(`✅ Declarations extracted & classified as [${catDetection.category}]! Review specifics below.`);
+                setIsProcessing(false);
+            }, 400);
 
         } catch (err: any) {
             console.error('Scan processing error:', err);
             if (detectedName) {
                 setProductName(detectedName);
             }
-            setStatusMsg(`⚠️ Notice: ${err.message || 'Image loaded'}. You can fill specifics directly.`);
-        } finally {
+            setScanStage('error');
+            setScanErrorMsg(err.message || 'Image scanning encountered an error. You can fill specifics directly in the grid.');
+            setStatusMsg(`⚠️ Notice: ${err.message || 'Image loaded'}`);
             setIsProcessing(false);
         }
     };
@@ -498,7 +588,10 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
         setNotes('');
         setRawText('');
         setImagePreview(null);
+        setSelectedFileInfo(null);
+        setScanStage('idle');
         setStatusMsg('');
+        setScanErrorMsg(null);
     };
 
     // Category-specific checklist items
@@ -517,6 +610,33 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
             };
         });
     }, [currentCategorySpec, liveAnalysis]);
+
+    const processingSteps = [
+        { id: 'uploading', label: 'Uploading', desc: 'Preparing image payload' },
+        { id: 'analyzing', label: 'Analyzing label', desc: 'Gemini AI reading text' },
+        { id: 'checking', label: 'Checking results', desc: 'Validating rules & category' },
+        { id: 'generating', label: 'Generating result', desc: 'Synthesizing compliance' }
+    ];
+
+    const getStepStatus = (stepId: string): 'pending' | 'active' | 'completed' | 'error' => {
+        if (scanStage === 'error') {
+            const stepOrder = ['uploading', 'analyzing', 'checking', 'generating'];
+            const errorIdx = stepOrder.indexOf('analyzing');
+            const thisIdx = stepOrder.indexOf(stepId);
+            if (thisIdx === errorIdx) return 'error';
+            if (thisIdx < errorIdx) return 'completed';
+            return 'pending';
+        }
+
+        const order = ['idle', 'uploading', 'analyzing', 'checking', 'generating', 'complete'];
+        const currentIdx = order.indexOf(scanStage);
+        const thisIdx = order.indexOf(stepId);
+
+        if (scanStage === 'complete') return 'completed';
+        if (currentIdx === thisIdx) return 'active';
+        if (currentIdx > thisIdx) return 'completed';
+        return 'pending';
+    };
 
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
@@ -571,7 +691,7 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
-                                <Upload size={14} /> Upload Image
+                                <Upload size={14} /> Upload & Drag-Drop
                             </button>
                             <button
                                 type="button"
@@ -593,7 +713,11 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                             <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
                                 <span>📸 Image Attached</span>
                                 <button
-                                    onClick={() => setImagePreview(null)}
+                                    onClick={() => {
+                                        setImagePreview(null);
+                                        setSelectedFileInfo(null);
+                                        setScanStage('idle');
+                                    }}
                                     className="text-rose-500 hover:text-rose-700 text-xs font-bold ml-1"
                                 >
                                     ✕
@@ -602,19 +726,18 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                         )}
                     </div>
 
-                    {/* Status Alert Banner */}
-                    {statusMsg && (
-                        <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-2xl text-xs font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
-                            <Sparkles size={16} className="text-blue-600 shrink-0" />
-                            <span>{statusMsg}</span>
-                        </div>
-                    )}
-
-                    {/* Upload Dropzone Area */}
+                    {/* Modern Drag & Drop Zone Area (Visible when Upload Tab is selected) */}
                     {activeTab === 'upload' && (
                         <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-blue-300 dark:border-blue-700/60 hover:border-blue-500 rounded-3xl p-8 text-center bg-blue-50/30 dark:bg-blue-950/20 hover:bg-blue-50/60 transition-all cursor-pointer"
+                            onDragEnter={handleDragEnter}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            className={`relative rounded-3xl p-6 transition-all duration-300 border ${
+                                isDraggingOver 
+                                    ? 'bg-blue-900/20 border-blue-500 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500'
+                                    : 'bg-blue-50/20 dark:bg-gray-800/40 border-dashed border-2 border-blue-300 dark:border-blue-700/60'
+                            }`}
                         >
                             <input
                                 type="file"
@@ -623,11 +746,132 @@ export const AddProductModal: React.FC<AddProductModalProps> = ({
                                 onChange={handleFileChange}
                                 className="hidden"
                             />
-                            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                                <Upload size={26} />
-                            </div>
-                            <h3 className="font-bold text-sm text-gray-900 dark:text-white">Click or Drag & Drop Packaging Image</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Supports JPG, PNG, WEBP — Auto-extracts declarations and detects category</p>
+
+                            {!imagePreview && !isProcessing && (
+                                <div className="flex flex-col items-center justify-center text-center py-6 px-4">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 transition-all duration-300 ${
+                                        isDraggingOver
+                                            ? 'bg-blue-600 text-white scale-110 shadow-lg shadow-blue-600/30'
+                                            : 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
+                                    }`}>
+                                        {isDraggingOver ? <Sparkles size={28} className="animate-pulse" /> : <Upload size={26} />}
+                                    </div>
+                                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                                        {isDraggingOver ? 'Drop packaging photo here' : 'Drag & Drop Packaging Photo or Browse'}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm">
+                                        Supports JPG, PNG, WEBP — Auto-extracts declarations and classifies category via Gemini
+                                    </p>
+                                    <div className="flex gap-3 mt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer"
+                                        >
+                                            Browse Files
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveTab('camera');
+                                                setShowCamera(true);
+                                            }}
+                                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+                                        >
+                                            Capture with Camera
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {imagePreview && (
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <ImageIcon size={16} className="text-blue-500" />
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                                {selectedFileInfo?.name || 'Packaging Image'}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400">
+                                                {selectedFileInfo?.size || 'Ready'}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                        >
+                                            Change Photo
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                                        <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black flex items-center justify-center">
+                                            <img src={imagePreview} alt="Preview" className="h-full object-contain" />
+                                        </div>
+
+                                        {/* Multi-Step Real Processing Stepper */}
+                                        <div className="p-3 bg-gray-50/80 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-800 space-y-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                                Analysis Stages
+                                            </p>
+                                            <div className="space-y-2">
+                                                {processingSteps.map((step, idx) => {
+                                                    const status = getStepStatus(step.id);
+                                                    return (
+                                                        <div key={step.id} className="flex items-center gap-2.5">
+                                                            <div className="shrink-0">
+                                                                {status === 'completed' ? (
+                                                                    <div className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                                                                        <CheckCircle2 size={11} />
+                                                                    </div>
+                                                                ) : status === 'active' ? (
+                                                                    <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center animate-spin">
+                                                                        <Loader2 size={11} />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-400 flex items-center justify-center text-[9px] font-bold">
+                                                                        {idx + 1}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <span className={`text-[11px] font-semibold ${
+                                                                status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' :
+                                                                status === 'active' ? 'text-blue-600 dark:text-blue-400' :
+                                                                'text-gray-400'
+                                                            }`}>
+                                                                {step.label}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {scanErrorMsg && (
+                                <div className="mt-3 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+                                    <span>⚠️ {scanErrorMsg}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (imagePreview) processUploadedImage(imagePreview);
+                                        }}
+                                        className="px-2.5 py-1 bg-rose-600 text-white font-bold rounded-lg text-[11px]"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
+
+                            {scanStage === 'complete' && statusMsg && (
+                                <div className="mt-3 p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                    <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                                    <span>{statusMsg}</span>
+                                </div>
+                            )}
                         </div>
                     )}
 
