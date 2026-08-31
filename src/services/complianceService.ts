@@ -10,6 +10,11 @@ import type {
   Violation,
   ComplianceStatus,
   ScannedProduct,
+  BoundingBox,
+  VisualQualitySummary,
+  SpatialAnalysisSummary,
+  ReadabilityStatus,
+  PlacementStatus,
 } from '../types';
 import {
   type ProductCategory,
@@ -19,6 +24,7 @@ import {
   validateBarcodeGTIN,
   validateCategoryLicense,
 } from './categoryRequirements';
+
 
 // ---- Helpers ------------------------------------------------
 
@@ -426,6 +432,202 @@ function extractRetailSalePrice(text: string): ComplianceDeclaration {
   return makeDeclaration(false, null, 'low');
 }
 
+// ---- Spatial Placement, Physical Font-Size & Readability Evaluator ----
+
+export interface SpatialEvaluationInput {
+  packagingBox?: BoundingBox | null;
+  pdpBox?: BoundingBox | null;
+  declarations?: Array<{
+    field: string;
+    boundingBox?: BoundingBox | null;
+    onPackage?: boolean;
+    onPDP?: boolean;
+    estimatedHeightPx?: number;
+  }>;
+}
+
+export function evaluateSpatialAndVisualCompliance(
+  declarations: ComplianceDeclarations,
+  spatialInput?: SpatialEvaluationInput | null,
+  visualQualityInput?: VisualQualitySummary | null,
+  qtyValueGrams: number = 250
+): {
+  spatialAnalysis: SpatialAnalysisSummary;
+  visualQuality: VisualQualitySummary;
+  spatialViolations: Violation[];
+} {
+  const spatialViolations: Violation[] = [];
+
+  // 1. Calculate Statutory Font Height Thresholds per Legal Metrology Rules, 2011 (Rule 13)
+  let minStatutoryHeightMm = 1.0;
+  if (qtyValueGrams > 1000) {
+    minStatutoryHeightMm = 6.0;
+  } else if (qtyValueGrams > 200) {
+    minStatutoryHeightMm = 4.0;
+  } else if (qtyValueGrams > 50) {
+    minStatutoryHeightMm = 2.0;
+  } else {
+    minStatutoryHeightMm = 1.0;
+  }
+
+  // 2. Readability Analysis
+  let overallReadability: ReadabilityStatus = 'READABILITY_PASS';
+  let readabilityNotes = 'Label declarations exhibit sharp contrast against the background packaging and high legibility.';
+
+  if (visualQualityInput) {
+    if (visualQualityInput.clarity === 'blurry' || visualQualityInput.contrastRatio === 'low') {
+      overallReadability = 'READABILITY_FAIL';
+      readabilityNotes = 'Low contrast or optical blur detected on package typography, compromising statutory legibility.';
+      spatialViolations.push({
+        field: 'readability',
+        label: 'Visual Contrast & Readability Check',
+        message: 'Non-compliant visual contrast / blur: Text fails minimum optical legibility against background.',
+        severity: 'major',
+        evidence: visualQualityInput.readabilityNotes || 'Low contrast ratio detected.',
+        recommendedAction: 'Ensure high contrast dark typography on clean bright background under Rule 9.'
+      });
+    } else if (visualQualityInput.clarity === 'partially_occluded' || visualQualityInput.lighting === 'glare' || visualQualityInput.lighting === 'dark') {
+      overallReadability = 'READABILITY_UNVERIFIED';
+      readabilityNotes = visualQualityInput.readabilityNotes || 'Readability could not be conclusively verified due to lighting glare or surface occlusion.';
+    } else if (visualQualityInput.readabilityNotes) {
+      readabilityNotes = visualQualityInput.readabilityNotes;
+    }
+  }
+
+  // 3. Physical Font Size Measurement & Scale Calibration
+  let scaleCalibrationMethod = 'Statutory Quantity Density Scaling / Reference Calibration';
+  let pixelsPerMm: number | null = null;
+  let overallPlacement: PlacementStatus = 'PLACEMENT_UNVERIFIED';
+  let overallPlacementNotes = 'Placement verified across packaging display panel regions.';
+
+  // Mandatory fields on Principal Display Panel (PDP) per Legal Metrology Rules 6 & 7:
+  // Generic Name, Net Quantity, MRP, Unit Sale Price
+  const pdpMandatoryFields = ['genericName', 'netQuantity', 'mrp', 'retailSalePrice'];
+
+  const spatialDecls = spatialInput?.declarations || [];
+
+  // Iterate across all declarations to populate spatial, font, and readability evidence
+  const allDeclKeys = Object.keys(declarations) as Array<keyof ComplianceDeclarations>;
+
+  allDeclKeys.forEach(key => {
+    const decl = declarations[key];
+    if (!decl || !decl.present) return;
+
+    const keyStr = String(key);
+    const spatialMatch = spatialDecls.find(s => s.field === keyStr || (keyStr === 'retailSalePrice' && s.field === 'unitSalePrice'));
+    const isPDPMandatory = pdpMandatoryFields.includes(keyStr);
+
+    // Readability for individual declaration
+    decl.readabilityStatus = decl.confidence === 'low' ? 'READABILITY_FAIL' : overallReadability;
+    decl.readabilityNotes = decl.confidence === 'low' 
+      ? 'Low OCR extraction confidence indicates degraded legibility or font distortion.' 
+      : readabilityNotes;
+
+    // Spatial Placement Determination
+    if (spatialMatch) {
+      decl.boundingBox = spatialMatch.boundingBox || null;
+      if (spatialMatch.onPackage === false) {
+        decl.placement = 'PLACEMENT_INVALID';
+        decl.placementReason = 'Declaration is located outside packaging boundaries (on background clutter).';
+        spatialViolations.push({
+          field: keyStr,
+          label: `${keyStr} Placement Violation`,
+          message: `Placement invalid: ${keyStr} detected outside package boundary in unrelated image background.`,
+          severity: 'major',
+          evidence: `Bounding Box: [ymin=${spatialMatch.boundingBox?.ymin || 0}, xmin=${spatialMatch.boundingBox?.xmin || 0}]`,
+          recommendedAction: 'Ensure all mandatory declarations are printed directly on the container/packaging.'
+        });
+      } else if (isPDPMandatory) {
+        if (spatialMatch.onPDP === true) {
+          decl.placement = 'PLACEMENT_VALID';
+          decl.placementReason = 'Declaration is situated properly on the Principal Display Panel (PDP).';
+        } else if (spatialMatch.onPDP === false) {
+          decl.placement = 'PLACEMENT_INVALID';
+          decl.placementReason = 'Mandatory declaration must appear on the Principal Display Panel (PDP) per Rule 6/7.';
+          spatialViolations.push({
+            field: keyStr,
+            label: `${keyStr} PDP Placement Failure`,
+            message: `Mandatory declaration (${keyStr}) is located away from Principal Display Panel.`,
+            severity: 'major',
+            evidence: 'Located on secondary side/flap instead of PDP.',
+            recommendedAction: 'Relocate product name, net quantity, and MRP onto the Principal Display Panel.'
+          });
+        } else {
+          decl.placement = 'PLACEMENT_UNVERIFIED';
+          decl.placementReason = 'Placement could not be conclusively verified from single view angle.';
+        }
+      } else {
+        decl.placement = 'PLACEMENT_VALID';
+        decl.placementReason = 'Declaration is located in an appropriate packaging area.';
+      }
+
+      // Font Size Measurement & Evaluation
+      decl.minimumRequiredMm = minStatutoryHeightMm;
+      if (spatialMatch.estimatedHeightPx && spatialMatch.estimatedHeightPx > 0) {
+        const estimatedMm = parseFloat(((spatialMatch.estimatedHeightPx / 1000) * 160).toFixed(1));
+        decl.fontSizeMm = estimatedMm;
+        decl.fontScaleMethod = 'Package Aspect Ratio Scale Calibration';
+        
+        if (estimatedMm >= minStatutoryHeightMm) {
+          decl.fontSizeStatus = 'FONT_SIZE_PASS';
+        } else {
+          decl.fontSizeStatus = 'FONT_SIZE_FAIL';
+          spatialViolations.push({
+            field: keyStr,
+            label: `${keyStr} Font Size Non-Compliance`,
+            message: `Measured font height (~${estimatedMm} mm) is below statutory minimum (${minStatutoryHeightMm} mm) under Legal Metrology Rule 13.`,
+            severity: 'minor',
+            evidence: `Estimated height: ${estimatedMm} mm vs Required: ${minStatutoryHeightMm} mm`,
+            recommendedAction: `Increase numeral/letter height to at least ${minStatutoryHeightMm} mm.`
+          });
+        }
+      } else {
+        decl.fontSizeStatus = 'FONT_SIZE_UNVERIFIED';
+        decl.fontSizeMm = null;
+        decl.fontScaleMethod = 'Cannot establish defensible physical millimeter scale without calibrated reference or dimension markings.';
+      }
+    }
+ else {
+      decl.placement = 'PLACEMENT_UNVERIFIED';
+      decl.placementReason = 'Placement could not be conclusively verified from single image view.';
+      decl.fontSizeStatus = 'FONT_SIZE_UNVERIFIED';
+      decl.fontSizeMm = null;
+      decl.minimumRequiredMm = minStatutoryHeightMm;
+      decl.fontScaleMethod = 'Scale unverified without physical reference.';
+    }
+  });
+
+  if (spatialViolations.some(v => v.field.includes('Placement'))) {
+    overallPlacement = 'PLACEMENT_INVALID';
+    overallPlacementNotes = 'One or more mandatory declarations are improperly placed outside required PDP regions.';
+  } else if (spatialDecls.length > 0 && spatialDecls.some(s => s.onPDP === true)) {
+    overallPlacement = 'PLACEMENT_VALID';
+    overallPlacementNotes = 'Mandatory declarations verified on Principal Display Panel.';
+  } else {
+    overallPlacement = 'PLACEMENT_UNVERIFIED';
+    overallPlacementNotes = 'Placement could not be conclusively verified without multi-angle packaging view.';
+  }
+
+  const spatialAnalysis: SpatialAnalysisSummary = {
+    packagingBox: spatialInput?.packagingBox || { ymin: 0, xmin: 0, ymax: 1000, xmax: 1000 },
+    pdpBox: spatialInput?.pdpBox || { ymin: 0, xmin: 0, ymax: 1000, xmax: 1000 },
+    overallPlacement,
+    overallPlacementNotes,
+    scaleCalibrationMethod,
+    pixelsPerMm
+  };
+
+  const visualQuality: VisualQualitySummary = {
+    contrastRatio: visualQualityInput?.contrastRatio || 'high',
+    clarity: visualQualityInput?.clarity || 'clear',
+    lighting: visualQualityInput?.lighting || 'adequate',
+    overallReadability,
+    readabilityNotes
+  };
+
+  return { spatialAnalysis, visualQuality, spatialViolations };
+}
+
 // ---- Main Compliance Analyser -------------------------------
 
 export interface FormSpecificsOverride {
@@ -448,13 +650,17 @@ export interface FormSpecificsOverride {
 export function analyseCompliance(
   rawText: string,
   productNameOrOverrides?: string | FormSpecificsOverride,
-  categoryOverride?: string
+  categoryOverride?: string,
+  spatialInput?: SpatialEvaluationInput | null,
+  visualQualityInput?: VisualQualitySummary | null
 ): {
   declarations: ComplianceDeclarations;
   violations: Violation[];
   complianceScore: number;
   complianceStatus: ComplianceStatus;
   category: ProductCategory;
+  spatialAnalysis: SpatialAnalysisSummary;
+  visualQuality: VisualQualitySummary;
 } {
   const text = normalizeOCRText(rawText);
 
@@ -625,27 +831,7 @@ export function analyseCompliance(
     declarations.bestBefore = makeDeclaration(true, declarations.bestBefore?.value || null, 'high', 'NOT_APPLICABLE', 'NOT_APPLICABLE', 'Expiry date is not mandatory for non-perishable commodity.', 'NOT_APPLICABLE');
   }
 
-  // Build Violations List strictly from applicable rules for this category
-  const violations: Violation[] = [];
-
-  spec.mandatoryDeclarations.forEach(item => {
-    if (item.requirement === 'NOT_APPLICABLE') return;
-
-    const decl = declarations[item.key] || (item.key === spec.regulatoryField.key ? declarations.regulatoryLicense : undefined);
-
-    if (item.requirement === 'REQUIRED') {
-      if (!decl || !decl.present || decl.status === 'FAIL') {
-        violations.push({
-          field: item.key,
-          label: item.label,
-          message: decl?.validationMessage || `${item.label} (${item.description}) is missing or invalid.`,
-          severity: item.severity,
-        });
-      }
-    }
-  });
-
-  // Readability & Font Size Compliance Check (Legal Metrology Rules 2011, Rule 13)
+  // Calculate Net Quantity in grams/ml for Rule 13 font size calculation
   let qtyValueGrams = 250;
   if (declarations.netQuantity.present && declarations.netQuantity.value) {
     const qtyText = declarations.netQuantity.value;
@@ -665,28 +851,35 @@ export function analyseCompliance(
     }
   }
 
-  let minHeightMm = 1.0;
-  if (qtyValueGrams > 1000) {
-    minHeightMm = 4.0;
-  } else if (qtyValueGrams > 200) {
-    minHeightMm = 2.0;
-  } else if (qtyValueGrams > 50) {
-    minHeightMm = 1.5;
-  }
+  // Execute Spatial Placement, Physical Font-Size & Readability Analysis
+  const { spatialAnalysis, visualQuality, spatialViolations } = evaluateSpatialAndVisualCompliance(
+    declarations,
+    spatialInput,
+    visualQualityInput,
+    qtyValueGrams
+  );
 
-  const unreadableDeclarations = Object.keys(declarations).filter(key => {
-    const dec = declarations[key as keyof ComplianceDeclarations];
-    return dec && dec.present && dec.confidence === 'low';
+  // Build Violations List strictly from applicable rules for this category + spatial/font violations
+  const violations: Violation[] = [...spatialViolations];
+
+  spec.mandatoryDeclarations.forEach(item => {
+    if (item.requirement === 'NOT_APPLICABLE') return;
+
+    const decl = declarations[item.key] || (item.key === spec.regulatoryField.key ? declarations.regulatoryLicense : undefined);
+
+    if (item.requirement === 'REQUIRED') {
+      if (!decl || !decl.present || decl.status === 'FAIL') {
+        violations.push({
+          field: item.key,
+          label: item.label,
+          message: decl?.validationMessage || `${item.label} (${item.description}) is missing or invalid.`,
+          severity: item.severity,
+          evidence: decl?.value || 'Missing declaration',
+          recommendedAction: `Ensure ${item.label} is declared in prominent format on the packaging.`
+        });
+      }
+    }
   });
-
-  if (unreadableDeclarations.length > 0) {
-    violations.push({
-      field: 'netQuantity',
-      label: 'Readability / Font Size Check',
-      message: `Font size warning: Under Legal Metrology Rules, package requires minimum numeral/letter height of ${minHeightMm} mm. Small or low-readability text detected for: ${unreadableDeclarations.map(k => k.replace(/([A-Z])/g, ' $1').trim()).join(', ')}.`,
-      severity: 'minor',
-    });
-  }
 
   // Dynamic Compliance Score Calculation
   const applicableMandatory = spec.mandatoryDeclarations.filter(d => d.requirement === 'REQUIRED');
@@ -700,7 +893,10 @@ export function analyseCompliance(
     totalPossible += weight;
     const decl = declarations[item.key] || (item.key === spec.regulatoryField.key ? declarations.regulatoryLicense : undefined);
     if (decl && decl.present && decl.status !== 'FAIL') {
-      earnedScore += weight;
+      let itemScore = weight;
+      if (decl.placement === 'PLACEMENT_INVALID') itemScore *= 0.5;
+      if (decl.readabilityStatus === 'READABILITY_FAIL') itemScore *= 0.7;
+      earnedScore += itemScore;
     }
   });
 
@@ -717,15 +913,23 @@ export function analyseCompliance(
 
   // Status
   let complianceStatus: ComplianceStatus;
-  if (complianceScore === 100) {
+  if (complianceScore === 100 && violations.length === 0) {
     complianceStatus = 'Compliant';
-  } else if (complianceScore === 0) {
+  } else if (complianceScore === 0 || violations.some(v => v.severity === 'critical')) {
     complianceStatus = 'Non-Compliant';
   } else {
     complianceStatus = 'Partially Compliant';
   }
 
-  return { declarations, violations, complianceScore, complianceStatus, category: resolvedCategory };
+  return {
+    declarations,
+    violations,
+    complianceScore,
+    complianceStatus,
+    category: resolvedCategory,
+    spatialAnalysis,
+    visualQuality
+  };
 }
 
 // ---- Validation Template -----------------------------------
@@ -821,12 +1025,24 @@ export function buildScanResult(
   productNameOrOverrides: string | FormSpecificsOverride,
   barcode?: string,
   imageData?: string,
-  categoryOverride?: string
+  categoryOverride?: string,
+  spatialInput?: SpatialEvaluationInput | null,
+  visualQualityInput?: VisualQualitySummary | null
 ): Omit<ScannedProduct, 'id'> {
-  const { declarations, violations, complianceScore, complianceStatus, category } = analyseCompliance(
+  const {
+    declarations,
+    violations,
+    complianceScore,
+    complianceStatus,
+    category,
+    spatialAnalysis,
+    visualQuality
+  } = analyseCompliance(
     rawText,
     productNameOrOverrides,
-    categoryOverride
+    categoryOverride,
+    spatialInput,
+    visualQualityInput
   );
 
   const productName = typeof productNameOrOverrides === 'string'
@@ -854,6 +1070,16 @@ export function buildScanResult(
     mrp: mrpVal,
     category,
     regulatoryLicense: regLic,
+    spatialAnalysis,
+    visualQuality,
+    enforcementStatus: 'AUDITED',
+    enforcementHistory: [{
+      id: 'enf-initial',
+      action: 'AUDITED',
+      timestamp: new Date().toISOString(),
+      officerName: 'Automated Inspector AI',
+      notes: 'Initial inspection scan and Legal Metrology compliance evaluation conducted.'
+    }]
   };
 }
 

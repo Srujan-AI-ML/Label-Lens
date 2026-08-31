@@ -89,13 +89,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                             <Settings size={20} />
                         </button>
 
-                        {/* User Profile & Logout */}
+                        {/* User Profile, Role Badge & Role Switcher */}
                         {user && (
                             <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200 dark:border-gray-700">
                                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-full">
                                     <User size={14} className="text-blue-600 dark:text-blue-400" />
-                                    <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                                    <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
                                         {user.username}
+                                    </span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                                        user.role === 'ADMIN' 
+                                            ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
+                                            : user.role === 'ENFORCEMENT_OFFICER'
+                                                ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                                : user.role === 'MERCHANT'
+                                                    ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                                    : 'bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                    }`}>
+                                        {user.role === 'ENFORCEMENT_OFFICER' ? 'Officer' : user.role || 'Inspector'}
                                     </span>
                                 </div>
                                 <button
@@ -107,6 +118,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
                                 </button>
                             </div>
                         )}
+
                     </div>
                 </div>
             </header>

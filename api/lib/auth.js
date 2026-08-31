@@ -1,11 +1,18 @@
-// Auth utility functions
+// Auth utility functions with RBAC
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'labellens-secret-key-change-in-production';
 
-export function generateToken(userId, username) {
+export const USER_ROLES = {
+    ADMIN: 'ADMIN',
+    ENFORCEMENT_OFFICER: 'ENFORCEMENT_OFFICER',
+    INSPECTOR: 'INSPECTOR',
+    MERCHANT: 'MERCHANT'
+};
+
+export function generateToken(userId, username, role = 'INSPECTOR') {
     return jwt.sign(
-        { userId, username },
+        { userId, username, role: role || 'INSPECTOR' },
         JWT_SECRET,
         { expiresIn: '7d' }
     );
@@ -13,7 +20,11 @@ export function generateToken(userId, username) {
 
 export function verifyToken(token) {
     try {
-        return jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded && !decoded.role) {
+            decoded.role = 'INSPECTOR'; // Safe default migration for legacy tokens
+        }
+        return decoded;
     } catch (error) {
         return null;
     }
@@ -34,3 +45,11 @@ export async function authenticateRequest(req) {
     }
     return verifyToken(token);
 }
+
+export function hasRole(user, allowedRoles = []) {
+    if (!user) return false;
+    const userRole = user.role || 'INSPECTOR';
+    if (userRole === 'ADMIN') return true; // Admin has full access to all resources
+    return allowedRoles.includes(userRole);
+}
+

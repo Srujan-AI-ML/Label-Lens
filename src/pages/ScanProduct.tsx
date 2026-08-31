@@ -111,6 +111,10 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     const [rawText, setRawText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+    // Spatial and Visual Quality AI Evidence
+    const [spatialData, setSpatialData] = useState<any>(null);
+    const [visualQualityData, setVisualQualityData] = useState<any>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Prevent default browser file opening when dragging anywhere in window
@@ -191,12 +195,12 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
     // Build synthesized label text from the specific fields
     const synthesizedText = useMemo(() => {
         const parts: string[] = [];
-        if (productName) parts.push(`Product: ${productName}`);
-        if (manufacturer) parts.push(`Manufactured by: ${manufacturer}`);
+        if (productName) parts.push(`Product Name: ${productName}`);
+        if (manufacturer) parts.push(`Manufacturer: ${manufacturer}`);
         if (netQuantity) parts.push(`Net Quantity: ${netQuantity} ${quantityUnit}`);
-        if (mrp) parts.push(`MRP: Rs. ${mrp} (incl. of all taxes)`);
+        if (mrp) parts.push(`MRP: ${mrp.startsWith('₹') ? mrp : `₹${mrp}`}`);
         if (mfgDate) parts.push(`Mfg Date: ${mfgDate}`);
-        if (expiryDate) parts.push(`Best Before: ${expiryDate}`);
+        if (expiryDate) parts.push(`Expiry Date: ${expiryDate}`);
         if (consumerCare) parts.push(`Consumer Care: ${consumerCare}`);
         if (fssaiLicense && category === 'Food & Beverage') parts.push(`FSSAI Lic No: ${fssaiLicense}`);
         if (regulatoryLicense && category !== 'Food & Beverage') parts.push(`${currentCategorySpec.regulatoryField.label}: ${regulatoryLicense}`);
@@ -224,9 +228,11 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 unitPrice,
                 category
             },
-            category
+            category,
+            spatialData,
+            visualQualityData
         );
-    }, [rawText, synthesizedText, productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category]);
+    }, [rawText, synthesizedText, productName, manufacturer, netQuantity, quantityUnit, mrp, mfgDate, expiryDate, consumerCare, fssaiLicense, regulatoryLicense, countryOfOrigin, unitPrice, category, spatialData, visualQualityData]);
 
     const handleCameraCapture = async (imageSrc: string) => {
         setShowCamera(false);
@@ -417,10 +423,17 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
 
             // Step 2: Google Gemini AI Multimodal Vision Analysis (Preserved exactly)
             const scanResult = await scanProductImageWithGemini(imageSrc);
-            const { text, product } = scanResult;
+            const { text, product, spatial, visualQuality } = scanResult;
 
             if (text) {
                 setRawText(text);
+            }
+
+            if (spatial) {
+                setSpatialData(spatial);
+            }
+            if (visualQuality) {
+                setVisualQualityData(visualQuality);
             }
 
             // Stage 3: Checking results (Validating extracted declarations & category classification)
@@ -566,7 +579,9 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
                 },
                 barcode.trim() || undefined,
                 imagePreview || undefined,
-                category
+                category,
+                spatialData,
+                visualQualityData
             );
             scanData.category = category;
             scanData.notes = notes;
@@ -601,6 +616,8 @@ export const ScanProduct: React.FC<ScanProductProps> = ({ onNavigate, onSelectPr
         setCategory('Food & Beverage');
         setNotes('');
         setRawText('');
+        setSpatialData(null);
+        setVisualQualityData(null);
         setImagePreview(null);
         setSelectedFileInfo(null);
         setScanStage('idle');

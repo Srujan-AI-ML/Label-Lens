@@ -17,9 +17,32 @@ export interface StructuredProduct {
     barcode?: string | null;
 }
 
+export interface GeminiScanDeclarationSpatial {
+    field: string;
+    boundingBox?: { ymin: number; xmin: number; ymax: number; xmax: number } | null;
+    onPackage?: boolean;
+    onPDP?: boolean;
+    estimatedHeightPx?: number;
+}
+
+export interface GeminiScanSpatial {
+    packagingBox?: { ymin: number; xmin: number; ymax: number; xmax: number } | null;
+    pdpBox?: { ymin: number; xmin: number; ymax: number; xmax: number } | null;
+    declarations?: GeminiScanDeclarationSpatial[];
+}
+
+export interface GeminiScanVisualQuality {
+    contrastRatio?: 'high' | 'medium' | 'low';
+    clarity?: 'clear' | 'blurry' | 'partially_occluded';
+    lighting?: 'adequate' | 'glare' | 'dark';
+    readabilityNotes?: string;
+}
+
 export interface GeminiScanResult {
     text: string;
     product: StructuredProduct;
+    spatial?: GeminiScanSpatial | null;
+    visualQuality?: GeminiScanVisualQuality | null;
 }
 
 export const saveUserGeminiApiKey = (key: string): void => {
@@ -77,6 +100,7 @@ async function callGeminiDirectlyFromClient(imagePayload: string, apiKey: string
 
     const promptText = `You are an expert Legal Metrology and packaged commodity inspector.
 Carefully examine the provided packaging/product label image. Extract all declarations accurately without inventing, guessing, or hallucinating information.
+Also perform spatial packaging layout and visual readability analysis.
 
 Return a strictly valid JSON object with the following structure:
 {
@@ -96,9 +120,71 @@ Return a strictly valid JSON object with the following structure:
     "countryOfOrigin": "Country of origin / manufacturing (e.g. India). Null if not visible.",
     "unitSalePrice": "Unit sale price (USP per g/ml) if indicated. Null if not visible.",
     "barcode": "Numeric barcode / EAN / UPC digits if visible on the label. Null if not visible."
+  },
+  "spatial": {
+    "packagingBox": { "ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000 },
+    "pdpBox": { "ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000 },
+    "declarations": [
+      {
+        "field": "genericName",
+        "boundingBox": { "ymin": 50, "xmin": 50, "ymax": 150, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 28
+      },
+      {
+        "field": "netQuantity",
+        "boundingBox": { "ymin": 400, "xmin": 60, "ymax": 470, "xmax": 350 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 18
+      },
+      {
+        "field": "mrp",
+        "boundingBox": { "ymin": 480, "xmin": 60, "ymax": 550, "xmax": 400 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 16
+      },
+      {
+        "field": "manufactureDate",
+        "boundingBox": { "ymin": 560, "xmin": 60, "ymax": 620, "xmax": 450 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 14
+      },
+      {
+        "field": "bestBefore",
+        "boundingBox": { "ymin": 630, "xmin": 60, "ymax": 690, "xmax": 450 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 14
+      },
+      {
+        "field": "manufacturer",
+        "boundingBox": { "ymin": 700, "xmin": 60, "ymax": 850, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": false,
+        "estimatedHeightPx": 12
+      },
+      {
+        "field": "consumerCare",
+        "boundingBox": { "ymin": 860, "xmin": 60, "ymax": 940, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": false,
+        "estimatedHeightPx": 11
+      }
+    ]
+  },
+  "visualQuality": {
+    "contrastRatio": "high",
+    "clarity": "clear",
+    "lighting": "adequate",
+    "readabilityNotes": "High contrast dark typography on clean bright label background with sharp edge clarity."
   }
 }
 
+Use normalized coordinates (0 to 1000 for ymin, xmin, ymax, xmax).
 Respond ONLY with the JSON object. Do not include markdown code block syntax or additional explanatory text.`;
 
     let lastError = null;
@@ -141,7 +227,9 @@ Respond ONLY with the JSON object. Do not include markdown code block syntax or 
                     console.log(`[Client Gemini] ✅ Success with model [${modelName}]`);
                     return {
                         text: parsed.rawText || '',
-                        product: parsed.product || {}
+                        product: parsed.product || {},
+                        spatial: parsed.spatial || null,
+                        visualQuality: parsed.visualQuality || null
                     };
                 }
             } else {
@@ -221,7 +309,9 @@ export async function scanProductImageWithGemini(imagePayload: string): Promise<
                 console.log('--- [PIPELINE] RAW TEXT EXTRACTED LENGTH ---', (data.text || '').length);
                 return {
                     text: data.text || '',
-                    product: data.product || {}
+                    product: data.product || {},
+                    spatial: data.spatial || null,
+                    visualQuality: data.visualQuality || null
                 };
             } else {
                 serverErrorMsg = data.error || data.details || `HTTP ${response.status}`;

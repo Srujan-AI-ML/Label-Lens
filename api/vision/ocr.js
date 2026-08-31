@@ -48,6 +48,7 @@ async function analyzePackagingWithGemini(base64Image, apiKey) {
 
     const promptText = `You are an expert Legal Metrology and packaged commodity inspector.
 Carefully examine the provided packaging/product label image. Extract all declarations accurately without inventing, guessing, or hallucinating information.
+Also perform spatial packaging layout and visual readability analysis.
 
 Return a strictly valid JSON object with the following structure:
 {
@@ -67,9 +68,71 @@ Return a strictly valid JSON object with the following structure:
     "countryOfOrigin": "Country of origin / manufacturing (e.g. India). Null if not visible.",
     "unitSalePrice": "Unit sale price (USP per g/ml) if indicated. Null if not visible.",
     "barcode": "Numeric barcode / EAN / UPC digits if visible on the label. Null if not visible."
+  },
+  "spatial": {
+    "packagingBox": { "ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000 },
+    "pdpBox": { "ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000 },
+    "declarations": [
+      {
+        "field": "genericName",
+        "boundingBox": { "ymin": 50, "xmin": 50, "ymax": 150, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 28
+      },
+      {
+        "field": "netQuantity",
+        "boundingBox": { "ymin": 400, "xmin": 60, "ymax": 470, "xmax": 350 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 18
+      },
+      {
+        "field": "mrp",
+        "boundingBox": { "ymin": 480, "xmin": 60, "ymax": 550, "xmax": 400 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 16
+      },
+      {
+        "field": "manufactureDate",
+        "boundingBox": { "ymin": 560, "xmin": 60, "ymax": 620, "xmax": 450 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 14
+      },
+      {
+        "field": "bestBefore",
+        "boundingBox": { "ymin": 630, "xmin": 60, "ymax": 690, "xmax": 450 },
+        "onPackage": true,
+        "onPDP": true,
+        "estimatedHeightPx": 14
+      },
+      {
+        "field": "manufacturer",
+        "boundingBox": { "ymin": 700, "xmin": 60, "ymax": 850, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": false,
+        "estimatedHeightPx": 12
+      },
+      {
+        "field": "consumerCare",
+        "boundingBox": { "ymin": 860, "xmin": 60, "ymax": 940, "xmax": 950 },
+        "onPackage": true,
+        "onPDP": false,
+        "estimatedHeightPx": 11
+      }
+    ]
+  },
+  "visualQuality": {
+    "contrastRatio": "high",
+    "clarity": "clear",
+    "lighting": "adequate",
+    "readabilityNotes": "High contrast dark typography on clean bright label background with sharp edge clarity."
   }
 }
 
+Use normalized coordinates (0 to 1000 for ymin, xmin, ymax, xmax).
 Respond ONLY with the JSON object. Do not include markdown code block syntax or additional explanatory text.`;
 
     let lastError = null;
@@ -115,13 +178,17 @@ Respond ONLY with the JSON object. Do not include markdown code block syntax or 
                         console.log(`[OCR Backend] ✅ Successfully parsed structured extraction from [${modelName}]`);
                         return {
                             rawText: parsed.rawText || '',
-                            product: parsed.product || {}
+                            product: parsed.product || {},
+                            spatial: parsed.spatial || null,
+                            visualQuality: parsed.visualQuality || null
                         };
                     } catch (parseErr) {
                         console.warn(`[OCR Backend] JSON parse error from model [${modelName}], falling back to text:`, parseErr.message);
                         return {
                             rawText: responseText,
-                            product: {}
+                            product: {},
+                            spatial: null,
+                            visualQuality: null
                         };
                     }
                 }
@@ -179,13 +246,15 @@ export default async function handler(req, res) {
         }
 
         console.log(`[OCR Backend] Processing image scan (User: ${userId || 'Guest'})...`);
-        const { rawText, product } = await analyzePackagingWithGemini(image, apiKey);
+        const { rawText, product, spatial, visualQuality } = await analyzePackagingWithGemini(image, apiKey);
         console.log(`[OCR Backend] ✅ Scan complete. Text length: ${rawText.length}, Product name: ${product?.productName || 'None'}`);
 
         return res.status(200).json({
             success: true,
             text: rawText,
-            product: product || {}
+            product: product || {},
+            spatial: spatial || null,
+            visualQuality: visualQuality || null
         });
 
     } catch (error) {
@@ -196,3 +265,4 @@ export default async function handler(req, res) {
         });
     }
 }
+

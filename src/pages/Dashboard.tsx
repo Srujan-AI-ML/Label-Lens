@@ -83,7 +83,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
             </div>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700/50 flex items-center gap-4">
                     <div className="p-4 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-2xl">
                         <FileText size={24} />
@@ -124,6 +124,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectProduc
                     </div>
                 </div>
             </div>
+
+            {/* Legal Metrology Enforcement Action Summary Strip */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 rounded-3xl p-6 mb-10 text-white shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-white/10">
+                    <div>
+                        <h3 className="text-sm font-black uppercase tracking-wider text-blue-300">
+                            Legal Metrology Enforcement Workflow Status
+                        </h3>
+                        <p className="text-xs text-gray-300 mt-0.5">
+                            Real-time tracking of statutory notices, compounding fines, and court prosecutions
+                        </p>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold tracking-widest bg-blue-500/20 text-blue-300 border border-blue-400/30 px-3 py-1 rounded-full">
+                        Section 36 & 48 LM Act
+                    </span>
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10">
+                        <p className="text-[11px] font-bold text-gray-300">Audited Pool</p>
+                        <p className="text-xl font-black text-white mt-1">
+                            {products.filter(p => !p.enforcementStatus || p.enforcementStatus === 'AUDITED').length}
+                        </p>
+                        <span className="text-[10px] text-gray-400">Initial inspections</span>
+                    </div>
+
+                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/30">
+                        <p className="text-[11px] font-bold text-amber-300">Notices Issued</p>
+                        <p className="text-xl font-black text-amber-300 mt-1">
+                            {products.filter(p => p.enforcementStatus === 'NOTICE_ISSUED').length}
+                        </p>
+                        <span className="text-[10px] text-amber-400/80">Show-cause dispatched</span>
+                    </div>
+
+                    <div className="p-3.5 bg-purple-500/10 rounded-2xl border border-purple-500/30">
+                        <p className="text-[11px] font-bold text-purple-300">Compounded Cases</p>
+                        <p className="text-xl font-black text-purple-300 mt-1">
+                            {products.filter(p => p.enforcementStatus === 'COMPOUNDED').length}
+                        </p>
+                        <span className="text-[10px] text-purple-400/80">Section 48 fines paid</span>
+                    </div>
+
+                    <div className="p-3.5 bg-rose-500/10 rounded-2xl border border-rose-500/30">
+                        <p className="text-[11px] font-bold text-rose-300">Prosecutions Filed</p>
+                        <p className="text-xl font-black text-rose-300 mt-1">
+                            {products.filter(p => p.enforcementStatus === 'PROSECUTION_FILED').length}
+                        </p>
+                        <span className="text-[10px] text-rose-400/80">Court proceedings</span>
+                    </div>
+                </div>
+            </div>
+
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

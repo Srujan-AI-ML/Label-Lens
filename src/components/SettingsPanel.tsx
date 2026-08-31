@@ -10,7 +10,8 @@ interface SettingsPanelProps {
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose }) => {
     const { isDarkMode, toggleDarkMode } = useTheme();
-    const { updatePassword } = useAuth();
+    const { user, switchRole, updatePassword } = useAuth();
+
 
     // Password Update States
     const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -93,6 +94,40 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                 </div>
 
                 <div className="p-5 space-y-6">
+                    {/* RBAC Role Switcher Section */}
+                    <section className="space-y-3">
+                        <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Access Control Role (RBAC)</h3>
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl space-y-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Switch active session role to test permission boundaries & enforcement capabilities:
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { id: 'ADMIN', label: 'Administrator', desc: 'Full System & DB Access' },
+                                    { id: 'ENFORCEMENT_OFFICER', label: 'Enforcement Officer', desc: 'Notices & Compounding' },
+                                    { id: 'INSPECTOR', label: 'Inspector', desc: 'Scanning & Audit Reports' },
+                                    { id: 'MERCHANT', label: 'Merchant / Mfr', desc: 'View Own Products Only' },
+                                ].map(r => {
+                                    const active = (user?.role || 'INSPECTOR') === r.id;
+                                    return (
+                                        <button
+                                            key={r.id}
+                                            onClick={() => switchRole(r.id as any)}
+                                            className={`p-2.5 rounded-xl text-left transition-all border cursor-pointer ${
+                                                active
+                                                    ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <p className="text-xs font-bold leading-tight">{r.label}</p>
+                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{r.desc}</p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </section>
+
                     {/* Preferences Section */}
                     <section className="space-y-3">
                         <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Preferences</h3>
@@ -116,6 +151,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose })
                             </button>
                         </div>
                     </section>
+
 
                     {/* Security Section */}
                     <section className="space-y-3">

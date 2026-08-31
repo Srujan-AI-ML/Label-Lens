@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { ScannedProduct } from '../types';
+import type { ScannedProduct, EnforcementStatus, EnforcementAction } from '../types';
 import { useProduct } from '../context/ProductContext';
-import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown, Save, X, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ArrowLeft, AlertTriangle, Printer, Edit2, FileDown, Save, X, FileText, CheckCircle, AlertCircle, Shield, Gavel, FileCheck, DollarSign, Scale } from 'lucide-react';
 import { analyseCompliance, calculateUnitSalePrice } from '../services/complianceService';
 import {
     ALL_CATEGORIES,
     CATEGORY_REQUIREMENTS,
     normalizeCategory,
-    validateBarcodeGTIN,
-    validateFSSAI,
-    validateCategoryLicense,
     type ProductCategory,
 } from '../services/categoryRequirements';
 import {
@@ -25,6 +23,9 @@ interface ReportDetailProps {
 
 export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) => {
     const { updateNotes, updateProduct } = useProduct();
+    const { user, isEnforcementOfficer, isAdmin } = useAuth();
+    const canManageEnforcement = isEnforcementOfficer || isAdmin;
+
     const [currentProduct, setCurrentProduct] = useState<ScannedProduct>(product);
     
     // Notes state
@@ -35,6 +36,15 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
     // Full Product Edit Modal state
     const [isEditingProduct, setIsEditingProduct] = useState(false);
     const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+    // Enforcement Workflow Modal state
+    const [isEnforcementModalOpen, setIsEnforcementModalOpen] = useState(false);
+    const [isSavingEnforcement, setIsSavingEnforcement] = useState(false);
+    const [enforcementActionType, setEnforcementActionType] = useState<EnforcementStatus>('NOTICE_ISSUED');
+    const [noticeNumber, setNoticeNumber] = useState(product.noticeReferenceNumber || '');
+    const [penaltyAmount, setPenaltyAmount] = useState<string>(product.penaltyAmount ? String(product.penaltyAmount) : '');
+    const [officerName, setOfficerName] = useState(user?.username || 'Enforcement Officer');
+    const [enforcementNotes, setEnforcementNotes] = useState('');
 
     // Edit form fields
     const [editProductName, setEditProductName] = useState('');
@@ -58,6 +68,8 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
     useEffect(() => {
         setCurrentProduct(product);
         setNotes(product.notes || '');
+        setNoticeNumber(product.noticeReferenceNumber || '');
+        setPenaltyAmount(product.penaltyAmount ? String(product.penaltyAmount) : '');
     }, [product]);
 
     const resolvedCategory = useMemo(() => {
@@ -166,7 +178,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 editUnitPrice ? `Unit Sale Price: ${editUnitPrice.trim()}` : ''
             ].filter(Boolean).join('\n');
 
-            const { declarations, violations, complianceScore, complianceStatus } = analyseCompliance(
+            const { declarations, violations, complianceScore, complianceStatus, spatialAnalysis, visualQuality } = analyseCompliance(
                 synth || currentProduct.rawExtractedText || '',
                 {
                     productName: editProductName.trim() || 'Inspected Commodity',
@@ -183,7 +195,9 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     unitPrice: editUnitPrice.trim(),
                     category: editCategory
                 },
-                editCategory
+                editCategory,
+                currentProduct.spatialAnalysis as any,
+                currentProduct.visualQuality
             );
 
             const mrpToSave = editMrp.trim()
@@ -201,6 +215,8 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 violations,
                 complianceScore,
                 complianceStatus,
+                spatialAnalysis,
+                visualQuality,
                 rawExtractedText: synth || currentProduct.rawExtractedText || ''
             };
 
@@ -215,6 +231,47 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         }
     };
 
+    const handleSaveEnforcementAction = async () => {
+        if (!canManageEnforcement) {
+            alert('Forbidden: Only Enforcement Officers and Administrators can modify enforcement actions.');
+            return;
+        }
+
+        setIsSavingEnforcement(true);
+        try {
+            const newAction: EnforcementAction = {
+                id: 'enf-' + Date.now(),
+                action: enforcementActionType,
+                timestamp: new Date().toISOString(),
+                officerName: officerName || user?.username || 'Enforcement Officer',
+                noticeNumber: noticeNumber.trim() || undefined,
+                penaltyAmount: penaltyAmount ? parseFloat(penaltyAmount) : undefined,
+                notes: enforcementNotes.trim() || `Enforcement action recorded: ${enforcementActionType}`
+            };
+
+            const currentHistory = Array.isArray(currentProduct.enforcementHistory)
+                ? currentProduct.enforcementHistory
+                : [];
+
+            const updatedRecord: Partial<ScannedProduct> = {
+                enforcementStatus: enforcementActionType,
+                noticeReferenceNumber: noticeNumber.trim() || undefined,
+                penaltyAmount: penaltyAmount ? parseFloat(penaltyAmount) : undefined,
+                assignedOfficer: officerName || user?.username || 'Enforcement Officer',
+                enforcementHistory: [...currentHistory, newAction]
+            };
+
+            const saved = await updateProduct(currentProduct.id, updatedRecord);
+            setCurrentProduct(saved);
+            setIsEnforcementModalOpen(false);
+            setEnforcementNotes('');
+        } catch (err: any) {
+            alert('Failed to update enforcement status: ' + err.message);
+        } finally {
+            setIsSavingEnforcement(false);
+        }
+    };
+
     const getStatusHeaderColor = (status: string) => {
         switch (status) {
             case 'Compliant':
@@ -223,6 +280,21 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                 return 'from-amber-500 to-orange-600 dark:from-amber-600 dark:to-orange-700 text-white';
             default:
                 return 'from-rose-500 to-red-600 dark:from-rose-600 dark:to-red-700 text-white';
+        }
+    };
+
+    const getEnforcementBadgeColor = (enfStatus: string) => {
+        switch (enfStatus) {
+            case 'NOTICE_ISSUED':
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300';
+            case 'COMPOUNDED':
+                return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300';
+            case 'PROSECUTION_FILED':
+                return 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300';
+            case 'COMPLIANT_CLOSED':
+                return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300';
+            default:
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300';
         }
     };
 
@@ -283,6 +355,15 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         <Edit2 size={16} />
                         Edit Product
                     </button>
+                    {canManageEnforcement && (
+                        <button
+                            onClick={() => setIsEnforcementModalOpen(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+                        >
+                            <Gavel size={16} />
+                            Enforcement Actions
+                        </button>
+                    )}
                     <button
                         onClick={handlePrint}
                         className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
@@ -296,7 +377,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         title="Download standard non-editable PDF certificate"
                     >
                         <FileDown size={16} />
-                        Download PDF Certificate
+                        Download PDF
                     </button>
                     <button
                         onClick={handleDownloadDOCX}
@@ -305,7 +386,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                         title="Download real editable Microsoft Word .docx report"
                     >
                         <FileText size={16} />
-                        {isGeneratingDocx ? 'Generating Word Doc...' : 'Download Editable Report (.DOCX)'}
+                        {isGeneratingDocx ? 'Generating Word Doc...' : 'Export DOCX'}
                     </button>
                 </div>
             </div>
@@ -314,9 +395,14 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
             <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700/50 shadow-lg">
                 <div className={`p-8 bg-gradient-to-r ${getStatusHeaderColor(currentProduct.complianceStatus)} flex flex-col sm:flex-row sm:items-center justify-between gap-6`}>
                     <div>
-                        <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
-                            Official Label Lens Inspection Certificate
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] uppercase font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
+                                Official Label Lens Inspection Certificate
+                            </span>
+                            <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full border ${getEnforcementBadgeColor(currentProduct.enforcementStatus || 'AUDITED')}`}>
+                                {currentProduct.enforcementStatus || 'AUDITED'}
+                            </span>
+                        </div>
                         <h1 className="text-2xl md:text-3xl font-black mt-2">{currentProduct.productName}</h1>
                         <p className="text-xs text-white/80 mt-1">
                             Inspection ID: {currentProduct.id} • Date: {new Date(currentProduct.scannedAt).toLocaleString()}
@@ -356,10 +442,15 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             </span>
                         </div>
                         <div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Statutory Framework</span>
-                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1 block">
-                                {unifiedReport.legalAct}
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase block">Enforcement Status</span>
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 mt-1 block">
+                                {currentProduct.enforcementStatus || 'AUDITED'}
                             </span>
+                            {currentProduct.noticeReferenceNumber && (
+                                <span className="text-[10px] text-gray-500 block font-mono">
+                                    Ref: {currentProduct.noticeReferenceNumber}
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -376,7 +467,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                             </div>
                         </div>
 
-                        {/* Category-Aware Declarations Audit Checklist */}
+                        {/* Category-Aware Declarations Audit Checklist (with Placement & Font Size) */}
                         <div className="lg:col-span-2">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase">
@@ -415,6 +506,11 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                                     }`}>
                                                         {item.requirement}
                                                     </span>
+                                                    {item.placement && item.placement !== 'NOT_APPLICABLE' && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                                                            {item.placement === 'PLACEMENT_VALID' ? '📍 PDP Valid' : item.placement === 'PLACEMENT_INVALID' ? '⚠️ Not on PDP' : '📍 Unverified PDP'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 
                                                 {item.value && item.value !== 'N/A' && (
@@ -424,7 +520,7 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                                 )}
 
                                                 <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
-                                                    {item.validationDetails}
+                                                    {item.validationDetails} {item.fontSize && item.fontSize !== 'NOT_APPLICABLE' ? `• Font: ${item.fontSize}` : ''}
                                                 </p>
                                             </div>
 
@@ -472,7 +568,65 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                                         </span>
                                         <div>
                                             <strong className="text-gray-900 dark:text-white">{v.label}</strong>: {v.message}
+                                            {v.evidence && (
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 italic">
+                                                    Evidence: {v.evidence}
+                                                </p>
+                                            )}
                                         </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Enforcement Workflow Action History Trail */}
+                    <div className="mb-8 p-6 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Gavel size={16} className="text-amber-600" />
+                                Official Legal Metrology Enforcement Action Trail
+                            </h3>
+                            {canManageEnforcement && (
+                                <button
+                                    onClick={() => setIsEnforcementModalOpen(true)}
+                                    className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                >
+                                    + Add Enforcement Record
+                                </button>
+                            )}
+                        </div>
+
+                        {(!currentProduct.enforcementHistory || currentProduct.enforcementHistory.length === 0) ? (
+                            <p className="text-xs text-gray-500 italic">No formal enforcement notices issued. Product logged in inspection audit pool.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {currentProduct.enforcementHistory.map((act, i) => (
+                                    <div key={act.id || i} className="p-3.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-0.5 rounded font-black text-[10px] uppercase border ${getEnforcementBadgeColor(act.action)}`}>
+                                                    {act.action}
+                                                </span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                    Officer: {act.officerName}
+                                                </span>
+                                                {act.noticeNumber && (
+                                                    <span className="font-mono text-gray-500 dark:text-gray-400">
+                                                        Notice #{act.noticeNumber}
+                                                    </span>
+                                                )}
+                                                {act.penaltyAmount !== undefined && act.penaltyAmount !== null && (
+                                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                        Compounded Penalty: ₹{act.penaltyAmount}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-300 mt-1">{act.notes}</p>
+                                        </div>
+                                        <span className="text-[10px] text-gray-400 shrink-0">
+                                            {new Date(act.timestamp).toLocaleString()}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -524,6 +678,117 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
                     </div>
                 </div>
             </div>
+
+            {/* Enforcement Action Transition Modal */}
+            {isEnforcementModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto no-print">
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-lg w-full border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden my-8">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-amber-50/50 dark:bg-amber-950/30">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Gavel size={20} className="text-amber-600" />
+                                    Legal Metrology Enforcement Action
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Execute statutory lifecycle updates per Legal Metrology Act, 2009.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsEnforcementModalOpen(false)}
+                                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Enforcement Action Status *
+                                </label>
+                                <select
+                                    value={enforcementActionType}
+                                    onChange={(e) => setEnforcementActionType(e.target.value as EnforcementStatus)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="AUDITED">AUDITED (Standard Inspection Recorded)</option>
+                                    <option value="NOTICE_ISSUED">NOTICE_ISSUED (Statutory Show-Cause Notice Dispatched)</option>
+                                    <option value="COMPOUNDED">COMPOUNDED (Compounding Penalty Collected per Section 48)</option>
+                                    <option value="PROSECUTION_FILED">PROSECUTION_FILED (Court Complaint Registered under Section 36)</option>
+                                    <option value="COMPLIANT_CLOSED">COMPLIANT_CLOSED (Deficiency Remedied / Case Closed)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Statutory Notice / Case Reference Number
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. LM-ACT/DL/2026/0889"
+                                    value={noticeNumber}
+                                    onChange={(e) => setNoticeNumber(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Compounding Penalty / Fine Amount (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    placeholder="e.g. 25000"
+                                    value={penaltyAmount}
+                                    onChange={(e) => setPenaltyAmount(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Responsible Enforcement Officer Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={officerName}
+                                    onChange={(e) => setOfficerName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Enforcement Disposition Notes
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="e.g. Section 36(1) penalty notice issued. 15-day rectification window granted."
+                                    value={enforcementNotes}
+                                    onChange={(e) => setEnforcementNotes(e.target.value)}
+                                    className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-800/50">
+                            <button
+                                onClick={() => setIsEnforcementModalOpen(false)}
+                                className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveEnforcementAction}
+                                disabled={isSavingEnforcement}
+                                className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
+                            >
+                                {isSavingEnforcement ? 'Recording Action...' : 'Confirm Action'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Product Edit Modal */}
             {isEditingProduct && (
@@ -772,3 +1037,4 @@ export const ReportDetail: React.FC<ReportDetailProps> = ({ product, onBack }) =
         </div>
     );
 };
+

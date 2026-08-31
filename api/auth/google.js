@@ -136,11 +136,13 @@ export default async function handler(req, res) {
             }
 
             // Create new user with custom credentials
+            const role = cleanUsername.toLowerCase() === 'admin' ? 'ADMIN' : 'INSPECTOR';
             const newUser = {
                 username: cleanUsername,
                 email: email.toLowerCase(),
                 googleId,
                 picture,
+                role: role,
                 password: await bcrypt.hash(cleanPassword, 10),
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -151,11 +153,14 @@ export default async function handler(req, res) {
             console.log('New Google user created with custom credentials:', user.username);
         }
 
-        // Generate JWT
+        const userRole = user.role || (user.username?.toLowerCase() === 'admin' ? 'ADMIN' : 'INSPECTOR');
+
+        // Generate JWT with role
         const token = jwt.sign(
             { 
                 userId: user._id.toString(), 
                 username: user.username || name,
+                role: userRole,
                 email: user.email
             },
             JWT_SECRET,
@@ -170,7 +175,8 @@ export default async function handler(req, res) {
                 id: user._id.toString(),
                 username: user.username || name,
                 email: user.email,
-                picture: user.picture || picture
+                picture: user.picture || picture,
+                role: userRole
             }
         });
 
@@ -179,3 +185,4 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Authentication failed', details: error.message });
     }
 }
+

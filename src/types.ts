@@ -8,6 +8,74 @@ export type ComplianceStatus = 'Compliant' | 'Non-Compliant' | 'Partially Compli
 export type ViolationSeverity = 'critical' | 'major' | 'minor';
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
+// Placement / PDP Compliance States
+export type PlacementStatus = 
+  | 'PLACEMENT_VALID'
+  | 'PLACEMENT_INVALID'
+  | 'PLACEMENT_UNVERIFIED'
+  | 'NOT_APPLICABLE';
+
+// Physical Font Size Compliance States
+export type FontSizeStatus =
+  | 'FONT_SIZE_PASS'
+  | 'FONT_SIZE_FAIL'
+  | 'FONT_SIZE_UNVERIFIED'
+  | 'NOT_APPLICABLE';
+
+// Visual Contrast & Readability States
+export type ReadabilityStatus =
+  | 'READABILITY_PASS'
+  | 'READABILITY_FAIL'
+  | 'READABILITY_UNVERIFIED';
+
+// Role-Based Access Control
+export type UserRole = 'ADMIN' | 'ENFORCEMENT_OFFICER' | 'INSPECTOR' | 'MERCHANT';
+
+// Enforcement Lifecycle Statuses
+export type EnforcementStatus = 
+  | 'AUDITED'
+  | 'NOTICE_ISSUED'
+  | 'COMPOUNDED'
+  | 'PROSECUTION_FILED'
+  | 'COMPLIANT_CLOSED';
+
+// Normalized 0..1000 bounding box coordinates
+export interface BoundingBox {
+  ymin: number;
+  xmin: number;
+  ymax: number;
+  xmax: number;
+}
+
+// Timestamped Enforcement Action Record
+export interface EnforcementAction {
+  id: string;
+  action: EnforcementStatus;
+  timestamp: string;          // ISO Date
+  officerId?: string;
+  officerName?: string;
+  noticeNumber?: string;
+  courtCaseNumber?: string;
+  penaltyAmount?: number;
+  notes?: string;
+}
+
+// Spatial & Visual Evidence for a declaration
+export interface DeclarationSpatialEvidence {
+  boundingBox?: BoundingBox | null;
+  onPackage?: boolean;
+  onPDP?: boolean;
+  placementStatus?: PlacementStatus;
+  placementReason?: string;
+  fontSizeStatus?: FontSizeStatus;
+  estimatedHeightPx?: number;
+  measuredHeightMm?: number | null;
+  minimumRequiredMm?: number;
+  fontScaleMethod?: string;
+  readabilityStatus?: ReadabilityStatus;
+  readabilityNotes?: string;
+}
+
 // Individual declaration result
 export interface ComplianceDeclaration {
   present: boolean;
@@ -17,6 +85,17 @@ export interface ComplianceDeclaration {
   validationStatus?: ValidationState | string;
   validationMessage?: string;
   requirement?: 'REQUIRED' | 'OPTIONAL' | 'NOT_APPLICABLE';
+  
+  // Spatial, Font Size & Readability Extensions
+  placement?: PlacementStatus;
+  placementReason?: string;
+  fontSizeStatus?: FontSizeStatus;
+  fontSizeMm?: number | null;
+  minimumRequiredMm?: number;
+  fontScaleMethod?: string;
+  readabilityStatus?: ReadabilityStatus;
+  readabilityNotes?: string;
+  boundingBox?: BoundingBox | null;
 }
 
 // All mandatory & category-specific declarations per Legal Metrology Rules 2011 & sectoral laws
@@ -49,6 +128,27 @@ export interface Violation {
   label: string;
   message: string;
   severity: ViolationSeverity;
+  evidence?: string;
+  recommendedAction?: string;
+}
+
+// Visual Quality Extraction from AI
+export interface VisualQualitySummary {
+  contrastRatio?: 'high' | 'medium' | 'low';
+  clarity?: 'clear' | 'blurry' | 'partially_occluded';
+  lighting?: 'adequate' | 'glare' | 'dark';
+  overallReadability?: ReadabilityStatus;
+  readabilityNotes?: string;
+}
+
+// Spatial Packaging Analysis
+export interface SpatialAnalysisSummary {
+  packagingBox?: BoundingBox | null;
+  pdpBox?: BoundingBox | null;
+  overallPlacement?: PlacementStatus;
+  overallPlacementNotes?: string;
+  scaleCalibrationMethod?: string;
+  pixelsPerMm?: number | null;
 }
 
 // A scanned product with its compliance report
@@ -67,6 +167,28 @@ export interface ScannedProduct {
   category?: string;                    // Food & Beverage / Cosmetics / Medicines / etc.
   notes?: string;                       // Inspector notes
   regulatoryLicense?: string | null;    // Stored category-specific license value
+  
+  // Spatial & Readability Evidence
+  spatialAnalysis?: SpatialAnalysisSummary;
+  visualQuality?: VisualQualitySummary;
+  photoEvidenceNotes?: string;
+
+  // Enforcement Workflow Lifecycle
+  enforcementStatus?: EnforcementStatus;
+  enforcementHistory?: EnforcementAction[];
+  assignedOfficer?: string;
+  noticeReferenceNumber?: string;
+  penaltyAmount?: number;
+}
+
+// User Profile with RBAC
+export interface UserProfile {
+  id: string;
+  username: string;
+  email?: string;
+  picture?: string;
+  role: UserRole;
+  department?: string;
 }
 
 // Dashboard summary stats
@@ -76,4 +198,12 @@ export interface ComplianceStats {
   partiallyCompliant: number;
   nonCompliant: number;
   averageScore: number;
+  
+  // Enforcement metrics
+  totalAudited?: number;
+  noticesIssued?: number;
+  compoundedCases?: number;
+  prosecutionCases?: number;
+  pendingEnforcement?: number;
 }
+

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { username, password } = req.body || {};
+        const { username, password, role: requestedRole } = req.body || {};
 
         // Validation
         if (!username || !password) {
@@ -63,22 +63,33 @@ export default async function handler(req, res) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Determine user role
+        const validRoles = ['ADMIN', 'ENFORCEMENT_OFFICER', 'INSPECTOR', 'MERCHANT'];
+        let role = 'INSPECTOR';
+        if (requestedRole && validRoles.includes(requestedRole.toUpperCase())) {
+            role = requestedRole.toUpperCase();
+        } else if (username.toLowerCase() === 'admin') {
+            role = 'ADMIN';
+        }
+
         // Create user
         const result = await usersCollection.insertOne({
             username: username.toLowerCase(),
             password: hashedPassword,
+            role: role,
             createdAt: new Date()
         });
 
-        // Generate token
-        const token = generateToken(result.insertedId.toString(), username.toLowerCase());
+        // Generate token with role
+        const token = generateToken(result.insertedId.toString(), username.toLowerCase(), role);
 
         return res.status(201).json({
             message: 'User created successfully',
             token,
             user: {
                 id: result.insertedId.toString(),
-                username: username.toLowerCase()
+                username: username.toLowerCase(),
+                role: role
             }
         });
 
@@ -90,3 +101,4 @@ export default async function handler(req, res) {
         });
     }
 }
+

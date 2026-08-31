@@ -1,7 +1,7 @@
-// Single Product API - GET single product detail, DELETE scan record
+// Single Product API - GET single product detail, PUT updates, DELETE scan record with RBAC
 import { ObjectId } from 'mongodb';
 import { connectToDatabase } from '../lib/mongodb.js';
-import { authenticateRequest } from '../lib/auth.js';
+import { authenticateRequest, hasRole } from '../lib/auth.js';
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     const user = await authenticateRequest(req);
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!user) return res.status(401).json({ error: 'Unauthorized. Token required.' });
 
     const { id } = req.query;
     if (!id || !ObjectId.isValid(id)) {
@@ -23,14 +23,18 @@ export default async function handler(req, res) {
         const { db } = await connectToDatabase();
         const col = db.collection('products');
 
-        // Verify product belongs to user
-        const existingProduct = await col.findOne({
-            _id: new ObjectId(id),
-            userId: user.userId
-        });
-
+        // Locate product
+        const existingProduct = await col.findOne({ _id: new ObjectId(id) });
         if (!existingProduct) {
             return res.status(404).json({ error: 'Product scan not found' });
+        }
+
+        // RBAC access check
+        const isPrivileged = hasRole(user, ['ADMIN', 'ENFORCEMENT_OFFICER']);
+        const isOwner = existingProduct.userId === user.userId;
+
+        if (!isPrivileged && !isOwner) {
+            return res.status(403).json({ error: 'Forbidden: You do not have permission to access this product record.' });
         }
 
         // GET - Fetch single product
@@ -41,19 +45,38 @@ export default async function handler(req, res) {
                 barcode: existingProduct.barcode || null,
                 mrp: existingProduct.mrp || existingProduct.declarations?.mrp?.value || null,
                 scannedAt: existingProduct.scannedAt,
-                complianceScore: existingProduct.complianceScore,
-                complianceStatus: existingProduct.complianceStatus,
+                complianceScore: existingProduct.complianceScore !== undefined ? existingProduct.complianceScore : 100,
+                complianceStatus: existingProduct.complianceStatus || 'Compliant',
                 declarations: existingProduct.declarations,
                 violations: existingProduct.violations || [],
                 rawExtractedText: existingProduct.rawExtractedText || '',
                 imageData: existingProduct.imageData || null,
                 category: existingProduct.category || null,
                 regulatoryLicense: existingProduct.regulatoryLicense || existingProduct.declarations?.regulatoryLicense?.value || existingProduct.declarations?.fssaiLicense?.value || null,
-                notes: existingProduct.notes || null
+                notes: existingProduct.notes || null,
+
+                // Spatial & Visual Quality Evidence
+                spatialAnalysis: existingProduct.spatialAnalysis || null,
+                visualQuality: existingProduct.visualQuality || null,
+                photoEvidenceNotes: existingProduct.photoEvidenceNotes || null,
+
+                // Enforcement Workflow Lifecycle
+                enforcementStatus: existingProduct.enforcementStatus || 'AUDITED',
+                enforcementHistory: existingProduct.enforcementHistory || [{
+                    id: 'enf-initial',
+                    action: existingProduct.enforcementStatus || 'AUDITED',
+                    timestamp: existingProduct.scannedAt || new Date().toISOString(),
+                    officerName: 'Automated Inspector AI',
+                    notes: 'Initial inspection scan recorded.'
+                }],
+                assignedOfficer: existingProduct.assignedOfficer || null,
+                noticeReferenceNumber: existingProduct.noticeReferenceNumber || null,
+                penaltyAmount: existingProduct.penaltyAmount || null,
+                userId: existingProduct.userId || null
             });
         }
 
-        // PUT - Update scan record and declarations
+        // PUT - Update scan record, declarations, or enforcement status
         if (req.method === 'PUT') {
             const {
                 productName,
@@ -67,7 +90,15 @@ export default async function handler(req, res) {
                 complianceScore,
                 complianceStatus,
                 rawExtractedText,
-                imageData
+                imageData,
+                spatialAnalysis,
+                visualQuality,
+                photoEvidenceNotes,
+                enforcementStatus,
+                enforcementAction,
+                noticeReferenceNumber,
+                penaltyAmount,
+                assignedOfficer
             } = req.body || {};
 
             const updates = {};
@@ -93,6 +124,41 @@ export default async function handler(req, res) {
             if (complianceStatus !== undefined) updates.complianceStatus = complianceStatus;
             if (rawExtractedText !== undefined) updates.rawExtractedText = rawExtractedText;
             if (imageData !== undefined) updates.imageData = imageData;
+            if (spatialAnalysis !== undefined) updates.spatialAnalysis = spatialAnalysis;
+            if (visualQuality !== undefined) updates.visualQuality = visualQuality;
+            if (photoEvidenceNotes !== undefined) updates.photoEvidenceNotes = photoEvidenceNotes;
+
+            // Enforcement Workflow updates (Role-Protected: only Enforcement Officers and Admins)
+            if (enforcementStatus !== undefined || enforcementAction !== undefined || noticeReferenceNumber !== undefined || penaltyAmount !== undefined) {
+                if (!isPrivileged) {
+                    return res.status(403).json({
+                        error: 'Forbidden: Only Enforcement Officers and Administrators can modify enforcement workflow records.'
+                    });
+                }
+
+                if (enforcementStatus !== undefined) updates.enforcementStatus = enforcementStatus;
+                if (noticeReferenceNumber !== undefined) updates.noticeReferenceNumber = noticeReferenceNumber || null;
+                if (penaltyAmount !== undefined) updates.penaltyAmount = penaltyAmount !== null ? Number(penaltyAmount) : null;
+                if (assignedOfficer !== undefined) updates.assignedOfficer = assignedOfficer || null;
+
+                // Append new action to audit history
+                if (enforcementAction) {
+                    const currentHistory = Array.isArray(existingProduct.enforcementHistory) ? existingProduct.enforcementHistory : [];
+                    const newActionRecord = {
+                        id: 'enf-' + Date.now(),
+                        action: enforcementAction.action || enforcementStatus || 'NOTICE_ISSUED',
+                        timestamp: enforcementAction.timestamp || new Date().toISOString(),
+                        officerId: user.userId,
+                        officerName: enforcementAction.officerName || user.username || 'Enforcement Officer',
+                        noticeNumber: enforcementAction.noticeNumber || noticeReferenceNumber || null,
+                        courtCaseNumber: enforcementAction.courtCaseNumber || null,
+                        penaltyAmount: enforcementAction.penaltyAmount !== undefined ? enforcementAction.penaltyAmount : (penaltyAmount || null),
+                        notes: enforcementAction.notes || 'Enforcement action status updated.'
+                    };
+                    updates.enforcementHistory = [...currentHistory, newActionRecord];
+                }
+            }
+
             updates.updatedAt = new Date();
 
             await col.updateOne(
@@ -115,12 +181,25 @@ export default async function handler(req, res) {
                 imageData: updatedProduct.imageData || null,
                 category: updatedProduct.category || null,
                 regulatoryLicense: updatedProduct.regulatoryLicense || updatedProduct.declarations?.regulatoryLicense?.value || updatedProduct.declarations?.fssaiLicense?.value || null,
-                notes: updatedProduct.notes || null
+                notes: updatedProduct.notes || null,
+                spatialAnalysis: updatedProduct.spatialAnalysis || null,
+                visualQuality: updatedProduct.visualQuality || null,
+                photoEvidenceNotes: updatedProduct.photoEvidenceNotes || null,
+                enforcementStatus: updatedProduct.enforcementStatus || 'AUDITED',
+                enforcementHistory: updatedProduct.enforcementHistory || [],
+                assignedOfficer: updatedProduct.assignedOfficer || null,
+                noticeReferenceNumber: updatedProduct.noticeReferenceNumber || null,
+                penaltyAmount: updatedProduct.penaltyAmount || null
             });
         }
 
-        // DELETE - Delete scan record
+        // DELETE - Delete scan record (Role-Protected: Admins or product owner)
         if (req.method === 'DELETE') {
+            const isAdmin = hasRole(user, ['ADMIN']);
+            if (!isAdmin && !isOwner) {
+                return res.status(403).json({ error: 'Forbidden: Only Administrators or the scan creator can delete records.' });
+            }
+
             await col.deleteOne({ _id: new ObjectId(id) });
             return res.status(200).json({ message: 'Product scan deleted successfully' });
         }
@@ -131,3 +210,4 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 }
+

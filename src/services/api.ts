@@ -44,10 +44,10 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 
 // Auth API
 export const authAPI = {
-    register: async (username: string, password: string) => {
+    register: async (username: string, password: string, role?: string) => {
         return fetchWithAuth('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, role })
         });
     },
 
@@ -57,6 +57,7 @@ export const authAPI = {
             body: JSON.stringify({ username, password })
         });
     },
+
 
     googleLogin: async (credential: string, username?: string, password?: string) => {
         return fetchWithAuth('/auth/google', {

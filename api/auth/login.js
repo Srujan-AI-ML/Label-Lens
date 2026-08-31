@@ -52,15 +52,20 @@ export default async function handler(req, res) {
             return res.status(401).json({ error: 'Invalid username or password' });
         }
 
-        // Generate token
-        const token = generateToken(user._id.toString(), user.username);
+        // Determine user role with safe default fallback
+        const role = user.role || (user.username.toLowerCase() === 'admin' ? 'ADMIN' : 'INSPECTOR');
+
+        // Generate token with role
+        const token = generateToken(user._id.toString(), user.username, role);
 
         return res.status(200).json({
             message: 'Login successful',
             token,
             user: {
                 id: user._id.toString(),
-                username: user.username
+                username: user.username,
+                role: role,
+                email: user.email || null
             }
         });
 
@@ -72,3 +77,4 @@ export default async function handler(req, res) {
         });
     }
 }
+
